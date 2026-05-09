@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Stormbringer</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <section id="startScreen" class="start-screen" aria-label="Stormbringer start screen">
+      <div class="panel title-panel">
+        <div class="title-mark" aria-hidden="true">
+          <i></i>
+          <i></i>
+          <i></i>
+        </div>
+        <p class="kicker">Stormbringer</p>
+        <h1>Stormbringer</h1>
+        <p class="copy">
+          Drag through the bullet storm, harvest energy, and time the magnet before it turns enemy fire against you.
+        </p>
+        <div class="title-records" aria-label="Saved records">
+          <div>
+            <span>Best</span>
+            <strong id="titleBestScore">0</strong>
+          </div>
+          <div>
+            <span>Last Run</span>
+            <strong id="titleLastScore">0</strong>
+          </div>
+        </div>
+        <div class="title-controls" aria-label="Quick controls">
+          <span>Mouse Movement</span>
+          <span>Right Mouse Magnet</span>
+          <span>Left Mouse Cease Fire</span>
+        </div>
+        <button id="startButton" type="button">Start Run</button>
+      </div>
+    </section>
+
+    <main id="gameShell" class="shell hidden" aria-label="Stormbringer bullet hell game">
+      <section class="stage">
+        <div class="game-wrap">
+          <canvas id="game" width="640" height="880" aria-label="Game canvas"></canvas>
+          <div id="debugPanel" class="debug-panel hidden" aria-label="Debug stats"></div>
+          <div class="play-streak-hud" aria-label="Streak status">
+            <strong id="streak"><span>Streak</span><b>-</b></strong>
+            <div class="streak-meter"><i id="streakFill"></i></div>
+          </div>
+          <div id="pauseMenu" class="pause-overlay hidden" aria-label="Pause menu and encyclopedia">
+            <div class="pause-panel">
+              <header class="pause-head">
+                <div>
+                  <p class="kicker">Paused</p>
+                  <h2>Field Encyclopedia</h2>
+                </div>
+                <button id="resumeButton" class="ghost-button" type="button">Resume</button>
+              </header>
+              <nav id="encyclopediaTabs" class="encyclopedia-tabs" aria-label="Encyclopedia sections">
+                <button class="active" type="button" data-tab="enemies">Enemies</button>
+                <button type="button" data-tab="weapons">Weapons</button>
+                <button type="button" data-tab="mechanics">Mechanics</button>
+                <button type="button" data-tab="help">Help</button>
+                <button type="button" data-tab="debug">Debug Keys</button>
+                <button type="button" data-tab="settings">Settings</button>
+              </nav>
+              <div id="encyclopediaBody" class="encyclopedia-body"></div>
+            </div>
+          </div>
+          <div id="menu" class="overlay hidden">
+            <div class="panel summary-panel">
+              <p class="kicker">Score 0 - Wave 1</p>
+              <h1>Signal lost.</h1>
+              <p class="copy"></p>
+              <button id="restartButton" type="button">Run It Back</button>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+    <script src="src/data.js"></script>
+    <script src="src/records.js"></script>
+    <script src="game.js"></script>
+  </body>
+</html>

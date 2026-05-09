@@ -1,0 +1,52 @@
+window.StormbringerData = {
+  powerupInfo: {
+    shotgun: { letter: "S", color: "#ffd166", slot: "main" },
+    trident: { letter: "T", color: "#6df6d5", slot: "main" },
+    missiles: { letter: "M", color: "#8a7dff", slot: "sub" },
+    machinegun: { letter: "G", color: "#ff5b74", slot: "sub" },
+  },
+  killLabels: {
+    ship: "Fighters",
+    jet: "Fighter Jets",
+    ufo: "UFOs",
+    cargo: "Cargo Ships",
+    splitter: "Splitters",
+    splitterShard: "Splitter Shards",
+    mine: "Mines",
+    bossCannon: "Boss Cannons",
+    boss: "Bosses",
+  },
+  encyclopedia: {
+    enemies: [
+      { mark: "F", color: "#ffd166", shape: "enemy", title: "Fighter", text: "Standard ship that enters from the sides and fires direct shots. It is the baseline threat and teaches spacing, target priority, and pickup timing.", tip: "Dies quickly, but groups can trap lanes." },
+      { mark: "J", color: "#edf7f5", shape: "enemy", title: "Fighter Jet", text: "Fast craft that enters, holds a fixed position, locks onto the player for 1.5 seconds, then fires two machine-gun lines toward the final lock position.", tip: "Move after the lock commits; the stream does not keep tracking." },
+      { mark: "U", color: "#8a7dff", shape: "enemy", title: "UFO", text: "Spinning disk enemy with default blue shields. It perches, fires a long red-orange laser, relocates, fires again, then exits after three shots.", tip: "Do not chase its last position; read the next perch and treat lasers as hard lanes." },
+      { mark: "C", color: "#ffd166", shape: "enemy", title: "Cargo Ship", text: "Armored transport with yellow armor squares over red hull. It does not fire, but each hit removes only one armor no matter how much damage the weapon deals.", tip: "Fast-firing weapons strip cargo armor fastest. Cargo ships guarantee one energy and one powerup." },
+      { mark: "X", color: "#ff5b74", shape: "enemy", title: "Splitter", text: "Cracked assault craft that creates three small hostile shards when destroyed. The shards do not fire, but they spread out and pressure space until killed or expired.", tip: "Kill it where you have room to clean up the shards." },
+      { mark: "*", color: "#ff5b74", shape: "enemy", title: "Mine", text: "Stationary space hazard that appears in minefield formations. Mines do not fire, but the forward flight path carries them down the screen into dangerous lanes.", tip: "Destroy a path through the formation, or dodge the whole field before it passes." },
+      { mark: "P", color: "#ffd166", shape: "enemy", title: "Named Planet", text: "Massive invulnerable planet with a generated name such as Planet Vesper or Planet Lumen. It passes half off-screen through the battle and projects a huge gold Frenzy aura. Attacking it does not damage the planet, but it shakes and civilian planes flee from the impact zone.", tip: "Treat the aura like contested territory: step in for damage tempo, then escape before the fire rate overwhelms you." },
+      { mark: "B", color: "#ff5b74", shape: "enemy", title: "Cannon Warden", text: "Boss encounter with four destructible cannons and a torso. Regular enemies retreat when it arrives.", tip: "Break cannons for guaranteed powerups and energy." },
+    ],
+    weapons: [
+      { mark: "N", color: "#6df6d5", shape: "main", title: "Default Main", text: "Single straight shot with steady fire rate. Reliable at range and easiest to aim while dodging.", tip: "At S rank, default shots can become golden critical shots for double damage." },
+      { mark: "S", color: "#ffd166", shape: "main", title: "Shotgun Main", text: "Wide, short-range blast with slower fire rate and high damage. Best when played close to enemies.", tip: "At S rank, the spread tightens and gains extra edge sparks for close-range burst." },
+      { mark: "T", color: "#6df6d5", shape: "main", title: "Trident Main", text: "Fires forward in three directions. It covers more space than default fire while still rewarding positioning.", tip: "At S rank, the center shot becomes wider and stronger." },
+      { mark: "M", color: "#8a7dff", shape: "sub", title: "Missile Sub", text: "Periodically launches homing missiles alongside the main weapon. Missiles do not trigger hit-stop.", tip: "At S rank, missile hits create a small area blast." },
+      { mark: "G", color: "#ff5b74", shape: "sub", title: "Machine Gun Sub", text: "Short-range wing guns with fast fire and low damage. Hits suppress enemy shooting for a moment.", tip: "At S rank, machine gun hits also lock enemies in place briefly." },
+    ],
+    mechanics: [
+      { mark: "5", color: "#6df6d5", shape: "sub", title: "Energy Release", text: "Collect five blue energy units to trigger an ultimate. The release heals one hull and changes based on your active weapons.", tip: "The cue now charges before firing so you can read it." },
+      { mark: "R", color: "#ffd166", shape: "main", title: "Main/Sub Slots", text: "Shotgun and trident are main weapons. Missiles and machine gun are sub weapons. One main and one sub can run together.", tip: "Picking up the same slot swaps that category." },
+      { mark: "+", color: "#7cf7a8", shape: "sub", title: "Hull", text: "The ship can take five hits. Individual blue energy pickups no longer heal directly; the heal happens when an ultimate triggers.", tip: "Survival comes from completing energy cycles." },
+      { mark: "A", color: "#ff5b74", shape: "enemy", title: "Magnet", text: "Right mouse attracts energy and powerups, but also ramps normal enemy bullets into faster tracking threats. UFO lasers are immune.", tip: "Holding magnet too long turns bullets dangerous." },
+      { mark: "L", color: "#edf7f5", shape: "main", title: "Cease Fire", text: "Left mouse stops firing and pauses powerup timers. One-shot ultimates still fire; sustained fire-pattern ultimates wait.", tip: "Use it to preserve weapon time or delay missile/lockdown releases." },
+      { mark: "!", color: "#ff5b74", shape: "enemy", title: "Boss Wave", text: "The Cannon Warden appears at wave 10, then every 5 waves after that. Regular enemies retreat when it arrives.", tip: "Press B during testing to force the boss." },
+    ],
+    help: [
+      { mark: "M", color: "#6df6d5", shape: "main", title: "Move", text: "Move the ship with the mouse inside the playfield.", tip: "The ship follows the cursor directly." },
+      { mark: "R", color: "#ffd166", shape: "main", title: "Magnet", text: "Hold right mouse to attract energy and powerups. Normal enemy bullets are also pulled toward the ship.", tip: "Tap it for pickups; holding too long turns bullets into danger." },
+      { mark: "L", color: "#edf7f5", shape: "main", title: "Cease Fire", text: "Hold left mouse to stop firing and pause weapon expiration timers.", tip: "Seal of Judgement also starts drawing with left mouse when armed." },
+      { mark: "P", color: "#8a7dff", shape: "sub", title: "Pause", text: "Press Esc or P to pause and open this help menu.", tip: "Use the tabs to review enemies, weapons, mechanics, debug keys, and settings." },
+    ],
+  },
+};
