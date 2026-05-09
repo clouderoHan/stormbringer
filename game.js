@@ -64,6 +64,8 @@ let playerDeathSequence = null;
 let score = 0;
 let streakCharge = 0;
 let streakDecayDelay = 0;
+let inventoryUnlockFlash = 0;
+let lastInventorySlotCount = 1;
 let bestStreakLevel = 0;
 let runStats = null;
 const { powerupInfo, killLabels, encyclopedia } = window.StormbringerData;
@@ -167,6 +169,7 @@ const currentStreakProgress = () => {
   return clamp((streakCharge - (level - 1) * STREAK_CHARGE_PER_LAYER) / STREAK_CHARGE_PER_LAYER, 0, 1);
 };
 const currentStreakDecayRate = () => STREAK_DECAY_BY_LEVEL[currentStreakLevel()] || 0;
+const inventorySlotCount = () => (currentStreakLevel() >= 5 ? 4 : currentStreakLevel() >= 4 ? 3 : currentStreakLevel() >= 3 ? 2 : 1);
 const hasSStreak = () => currentStreakLevel() >= STREAK_LAYERS.length;
 const hasEnergyFloor = () => currentStreakLevel() >= 4;
 const minimumEnergy = () => (hasSStreak() ? 2 : hasEnergyFloor() ? 1 : 0);
@@ -277,6 +280,7 @@ function recordKill(type) {
 
 function addStreakCharge(amount, x = player ? player.x : WIDTH / 2, y = player ? player.y : HEIGHT / 2, canRankUp = false) {
   const before = currentStreakLevel();
+  const beforeSlots = inventorySlotCount();
   let nextCharge = clamp(streakCharge + amount, 0, STREAK_LAYERS.length * STREAK_CHARGE_PER_LAYER);
   if (!canRankUp) {
     const capLevel = Math.max(1, before);
@@ -285,10 +289,15 @@ function addStreakCharge(amount, x = player ? player.x : WIDTH / 2, y = player ?
   }
   streakCharge = nextCharge;
   const after = currentStreakLevel();
+  const afterSlots = inventorySlotCount();
   bestStreakLevel = Math.max(bestStreakLevel, after);
   if (after > before && after > 0) {
     const layer = STREAK_LAYERS[after - 1];
     addRingBurst(x, y, layer.color, 12 + after * 3, 8 + after * 2, 170 + after * 35, 2.5 + after * 0.25);
+  }
+  if (afterSlots > beforeSlots) {
+    inventoryUnlockFlash = 0.75;
+    lastInventorySlotCount = afterSlots;
   }
 }
 
@@ -342,14 +351,27 @@ function projectileImpactAngle(source, target) {
 }
 
 function clearStreak() {
+  const previousSlots = inventorySlotCount();
   streakCharge = 0;
   streakDecayDelay = 0;
+  if (player && player.inventory && previousSlots > inventorySlotCount()) {
+    const kept = player.inventory.slice(0, inventorySlotCount());
+    const lost = player.inventory.slice(inventorySlotCount());
+    player.inventory = kept;
+    lost.forEach((type, index) => scatterInventoryPowerup(type, index, lost.length));
+    if (lost.length) {
+      addFloatingText(player.x, player.y - 54, "INVENTORY SPILL", "#ffd166");
+      addRingBurst(player.x, player.y, "#ffd166", 20, 7, 230, 3);
+    }
+  }
 }
 
 function debugSetSStreak() {
   if (!player) return;
   streakCharge = STREAK_LAYERS.length * STREAK_CHARGE_PER_LAYER;
   streakDecayDelay = 1;
+  inventoryUnlockFlash = 0.75;
+  lastInventorySlotCount = inventorySlotCount();
   bestStreakLevel = STREAK_LAYERS.length;
   player.charge = Math.max(player.charge, minimumEnergy());
   addFloatingText(player.x, player.y - 48, "S STREAK", STREAK_LAYERS[STREAK_LAYERS.length - 1].color);
@@ -888,6 +910,7 @@ function resetGame() {
     mainTimer: 0,
     subWeapon: "none",
     subTimer: 0,
+    inventory: [],
     rapidMissileTimer: 0,
     lockdownTimer: 0,
     frenzyTimer: 0,
@@ -915,6 +938,8 @@ function resetGame() {
   score = 0;
   streakCharge = 0;
   streakDecayDelay = 0;
+  inventoryUnlockFlash = 0;
+  lastInventorySlotCount = 1;
   bestStreakLevel = 0;
   runStats = {
     startedAt: Date.now(),
@@ -2076,6 +2101,30 @@ function spawnPowerup(x, y, type = randomPowerupType()) {
   });
 }
 
+function scatterInventoryPowerup(type, index = 0, total = 1) {
+  if (!player) return;
+  const info = powerupInfo[type] || powerupInfo.shotgun;
+  const spread = total > 1 ? (index - (total - 1) / 2) * 0.58 : 0;
+  const angle = -Math.PI / 2 + spread + rand(-0.28, 0.28);
+  const speed = rand(190, 260);
+  const x = clamp(player.x + Math.cos(angle) * 18, 26, WIDTH - 26);
+  const y = clamp(player.y + Math.sin(angle) * 18, 28, HEIGHT - 28);
+  addLootReleaseFlash(x, y, info.color, true);
+  powerups.push({
+    x,
+    y,
+    r: 11,
+    type,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed - 40,
+    drift: rand(-34, 34),
+    pulse: 0,
+    magnetWeight: 0.065,
+    collectDelay: 0.85,
+    life: rand(8.6, 10.4),
+  });
+}
+
 function spawnDebugPowerup(type) {
   if (!player) return;
   const x = clamp(player.x + rand(-28, 28), 28, WIDTH - 28);
@@ -2254,6 +2303,56 @@ const ultimateInfo = {
   missiles: { label: "MISSILE STORM", color: "#8a7dff", sound: "missiles" },
   lockdown: { label: "LOCKDOWN", color: "#ff5b74", sound: "lockdown" },
 };
+
+function activeWeaponInSlot(slot) {
+  return slot === "main" ? player.mainWeapon !== "normal" : player.subWeapon !== "none";
+}
+
+function activatePowerup(type, fromQueue = false) {
+  const info = powerupInfo[type] || powerupInfo.shotgun;
+  if (info.slot === "sub") {
+    player.subWeapon = type;
+    player.subTimer = 10;
+    if (type === "missiles") missileTimer = 0.2;
+    if (type === "machinegun") machineGunTimer = 0.05;
+  } else {
+    player.mainWeapon = type === "trident" ? "trident" : "shotgun";
+    player.mainTimer = 8;
+  }
+  const label = type === "machinegun" ? "MACHINE GUN" : type.toUpperCase();
+  addFloatingText(player.x, player.y - (fromQueue ? 44 : 28), fromQueue ? `READY: ${label}` : label, info.color);
+  audio.pickup(type);
+}
+
+function activateQueuedPowerup(slot) {
+  if (!player.inventory || activeWeaponInSlot(slot)) return false;
+  const index = player.inventory.findIndex((type) => (powerupInfo[type] || powerupInfo.shotgun).slot === slot);
+  if (index < 0) return false;
+  const [nextType] = player.inventory.splice(index, 1);
+  activatePowerup(nextType, true);
+  return true;
+}
+
+function collectPowerup(type) {
+  const info = powerupInfo[type] || powerupInfo.shotgun;
+  player.inventory ||= [];
+  if (activeWeaponInSlot(info.slot)) {
+    if (player.inventory.length < inventorySlotCount()) {
+      player.inventory.push(type);
+      addFloatingText(player.x, player.y - 28, `STORED ${info.letter}`, info.color);
+      audio.pickup(type);
+      return true;
+    }
+    const replaced = player.inventory.shift();
+    player.inventory.push(type);
+    const replacedInfo = powerupInfo[replaced] || powerupInfo.shotgun;
+    addFloatingText(player.x, player.y - 28, `${replacedInfo.letter}->${info.letter}`, info.color);
+    audio.pickup(type);
+    return true;
+  }
+  activatePowerup(type);
+  return true;
+}
 
 function queuedUltimateType() {
   const mainWeapon = effectiveMainWeapon();
@@ -2821,12 +2920,14 @@ function updatePlayer(dt) {
   player.mainTimer = Math.max(0, player.mainTimer - powerupDt);
   if (player.mainTimer <= 0) {
     player.mainWeapon = "normal";
+    activateQueuedPowerup("main");
   }
   player.subTimer = Math.max(0, player.subTimer - powerupDt);
   player.rapidMissileTimer = Math.max(0, player.rapidMissileTimer - dt);
   player.lockdownTimer = Math.max(0, player.lockdownTimer - dt);
   if (player.subTimer <= 0) {
     player.subWeapon = "none";
+    activateQueuedPowerup("sub");
   }
 
   player.x = clamp(player.x, 18, WIDTH - 18);
@@ -3421,6 +3522,7 @@ function resolveCollisions() {
   powerups = powerups.filter((powerup) => {
     const dropStep = circleActive ? 0.16 / 60 : 1 / 60;
     powerup.life -= dropStep;
+    powerup.collectDelay = Math.max(0, (powerup.collectDelay || 0) - dropStep);
     powerup.vy += 0.16 * (circleActive ? 0.16 : 1);
     powerup.vx += Math.sin(powerup.pulse * 0.7) * 0.08 + (powerup.drift || 0) * 0.0024;
     powerup.vx *= 0.989;
@@ -3428,34 +3530,12 @@ function resolveCollisions() {
     powerup.x += powerup.vx * dropStep;
     powerup.y += powerup.vy * dropStep;
     powerup.pulse += 0.08;
-    if (!circleActive && pointer.rightDown) {
+    if (!circleActive && pointer.rightDown && !powerup.collectDelay) {
       magnetPull(powerup, (powerup.magnetWeight || 0.065) * (0.25 + magnetRamp() * 0.75));
     }
-    if (dist2(player, powerup) < (player.r + powerup.r + 3) ** 2) {
+    if (!powerup.collectDelay && dist2(player, powerup) < (player.r + powerup.r + 3) ** 2) {
       refreshStreakDecay();
-      if (powerup.type === "missiles") {
-        player.subWeapon = "missiles";
-        player.subTimer = 10;
-        missileTimer = 0.2;
-        addFloatingText(player.x, player.y - 28, "MISSILES", "#8a7dff");
-        audio.pickup("missiles");
-      } else if (powerup.type === "machinegun") {
-        player.subWeapon = "machinegun";
-        player.subTimer = 10;
-        machineGunTimer = 0.05;
-        addFloatingText(player.x, player.y - 28, "MACHINE GUN", "#ff5b74");
-        audio.pickup("machinegun");
-      } else if (powerup.type === "trident") {
-        player.mainWeapon = "trident";
-        player.mainTimer = 8;
-        addFloatingText(player.x, player.y - 28, "TRIDENT", "#6df6d5");
-        audio.pickup("trident");
-      } else {
-        player.mainWeapon = "shotgun";
-        player.mainTimer = 8;
-        addFloatingText(player.x, player.y - 28, "SHOTGUN", "#ffd166");
-        audio.pickup("shotgun");
-      }
+      collectPowerup(powerup.type);
       addParticles(powerup.x, powerup.y, powerupInfo[powerup.type].color, 20, 210);
       return false;
     }
@@ -3667,6 +3747,7 @@ function updatePlayerHealFeedback(dt) {
 }
 
 function updateKillStreak(dt) {
+  inventoryUnlockFlash = Math.max(0, inventoryUnlockFlash - dt);
   if (streakCharge <= 0) return;
   if (streakDecayDelay > 0) {
     streakDecayDelay = Math.max(0, streakDecayDelay - dt);
@@ -4009,6 +4090,71 @@ function drawEnergyPips() {
       ctx.globalAlpha = 1;
     }
   }
+}
+
+function drawPowerupInventory() {
+  const slots = inventorySlotCount();
+  const stored = player.inventory || [];
+  const x = 24;
+  const y = HEIGHT - 84;
+  const size = 20;
+  const gap = 7;
+  const lockLetters = ["", "B", "A", "S"];
+  const lockColors = ["", "#ffd166", "#ff8c42", "#ff5b74"];
+
+  ctx.save();
+  ctx.font = "900 10px ui-monospace, Consolas, monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (let i = 0; i < 4; i += 1) {
+    const slotX = x + i * (size + gap);
+    const unlocked = i < slots;
+    const type = stored[i];
+    const info = type ? powerupInfo[type] || powerupInfo.shotgun : null;
+    const justUnlocked = inventoryUnlockFlash > 0 && i === lastInventorySlotCount - 1;
+    const flash = justUnlocked ? clamp(inventoryUnlockFlash / 0.75, 0, 1) : 0;
+    ctx.fillStyle = unlocked ? "rgba(7, 16, 20, 0.42)" : "rgba(7, 16, 20, 0.20)";
+    ctx.strokeStyle = unlocked
+      ? `rgba(237, 247, 245, ${0.22 + flash * 0.42})`
+      : "rgba(237, 247, 245, 0.11)";
+    ctx.shadowColor = flash > 0 ? (lockColors[i] || "#edf7f5") : "transparent";
+    ctx.shadowBlur = flash * 16;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(slotX, y, size, size, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    if (!unlocked) {
+      ctx.fillStyle = lockColors[i] || "rgba(237, 247, 245, 0.34)";
+      ctx.globalAlpha = 0.52;
+      ctx.fillText(lockLetters[i] || "", slotX + size / 2, y + size / 2 + 0.5);
+      ctx.globalAlpha = 1;
+      continue;
+    }
+    if (!info) continue;
+    ctx.save();
+    ctx.translate(slotX + size / 2, y + size / 2);
+    ctx.fillStyle = info.color;
+    ctx.shadowColor = info.color;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    if (info.slot === "main") {
+      ctx.moveTo(0, -8);
+      ctx.lineTo(8, 0);
+      ctx.lineTo(0, 8);
+      ctx.lineTo(-8, 0);
+      ctx.closePath();
+    } else {
+      ctx.arc(0, 0, 8, 0, Math.PI * 2);
+    }
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#071014";
+    ctx.fillText(info.letter, 0, 0.5);
+    ctx.restore();
+  }
+  ctx.restore();
 }
 
 function drawTopScore() {
@@ -4785,8 +4931,12 @@ function drawPowerup(powerup) {
   const info = powerupInfo[powerup.type] || powerupInfo.shotgun;
   const color = info.color;
   const isMain = info.slot === "main";
+  const lockedRatio = clamp((powerup.collectDelay || 0) / 0.85, 0, 1);
   ctx.save();
   ctx.translate(powerup.x, powerup.y);
+  if (lockedRatio > 0) {
+    ctx.globalAlpha = 0.42 + (1 - lockedRatio) * 0.42;
+  }
   ctx.shadowColor = color;
   ctx.shadowBlur = 22;
   ctx.strokeStyle = color;
@@ -4839,6 +4989,16 @@ function drawPowerup(powerup) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(info.letter, 0, 1);
+  if (lockedRatio > 0) {
+    ctx.globalAlpha = 0.72;
+    ctx.strokeStyle = "#edf7f5";
+    ctx.shadowColor = "#edf7f5";
+    ctx.shadowBlur = 8;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 25 - lockedRatio * 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - lockedRatio));
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -5699,6 +5859,7 @@ function draw() {
 
   drawPlayerHealth();
   drawEnergyPips();
+  drawPowerupInventory();
   drawTopScore();
   drawPlayerHealCue();
   drawPlayerDamageCue();
