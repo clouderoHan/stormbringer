@@ -215,7 +215,8 @@ const isFrenziedEnemy = (drone) => {
 const isPlayerFrenzied = () => {
   return Boolean(player && (player.frenzyTimer || 0) > 0);
 };
-const isDroneRooted = (drone) => Boolean(drone && drone.type !== "mothership" && (drone.rootTimer || 0) > 0);
+const isDroneSlowed = (drone) => Boolean(drone && drone.type !== "mothership" && (drone.slowTimer || 0) > 0);
+const droneMoveScale = (drone) => (isDroneSlowed(drone) ? 0.38 : 1);
 
 const isDroneOnPlayerScreen = (drone) => Boolean(
   drone &&
@@ -3118,7 +3119,7 @@ function suppressDrone(drone, duration = 0.85) {
   drone.suppressed = Math.max(drone.suppressed || 0, duration);
   drone.suppressionFlash = 0.14;
   if (hasSOverdrive() && (player.subWeapon === "machinegun" || player.lockdownTimer > 0)) {
-    drone.rootTimer = Math.max(drone.rootTimer || 0, duration * 0.72);
+    drone.slowTimer = Math.max(drone.slowTimer || 0, duration * 0.72);
   }
   if (drone.type === "jet" && drone.burstShots <= 0) {
     drone.lockTimer = Math.min(drone.lockMax || 3, drone.lockTimer + duration * 0.75);
@@ -3647,20 +3648,14 @@ function updateEnemies(dt) {
         }
       }
     }
-    const rooted = isDroneRooted(drone);
-    if (!rooted && !drone.exiting && ENEMY_FORWARD_DRIFT[drone.type]) {
+    const moveScale = droneMoveScale(drone);
+    if (!drone.exiting && ENEMY_FORWARD_DRIFT[drone.type]) {
       const driftSpeed = drone.type === "cargo" && drone.fleeing ? 10 : ENEMY_FORWARD_DRIFT[drone.type];
-      const drift = driftSpeed * dt;
+      const drift = driftSpeed * dt * moveScale;
       drone.y += drift;
       drone.targetY = Math.min(HEIGHT + 90, (drone.targetY || drone.y) + drift);
     }
-    if (rooted) {
-      drone.vx *= 0.72;
-      drone.vy = (drone.vy || 0) * 0.72;
-      if (drone.type === "ufo" && (drone.phase === "arrive" || drone.phase === "moving")) {
-        drone.cooldown = Math.max(drone.cooldown || 0, 0.08);
-      }
-    } else if (drone.exiting) {
+    if (drone.exiting) {
       drone.x += drone.vx * dt;
       drone.y += (drone.vy || 96) * dt;
       drone.cooldown = 99;
@@ -3679,18 +3674,18 @@ function updateEnemies(dt) {
         drone.exiting = true;
       }
     } else if (drone.type === "jet") {
-      drone.x += (drone.targetX - drone.x) * dt * 2.4;
-      drone.y += (drone.targetY - drone.y) * dt * 2.4 + Math.sin(drone.wobble) * 0.25;
+      drone.x += (drone.targetX - drone.x) * dt * 2.4 * moveScale;
+      drone.y += (drone.targetY - drone.y) * dt * 2.4 * moveScale + Math.sin(drone.wobble) * 0.25 * moveScale;
       drone.vx *= 0.96;
     } else if (drone.formation) {
       const path = drone.formation;
-      drone.y += path.speed * dt;
+      drone.y += path.speed * dt * moveScale;
       const progress = clamp((drone.y + 80) / (HEIGHT * 0.72), 0, 1);
       const arc = Math.sin(progress * Math.PI + path.arcPhase) * path.arcAmp;
       const sway = Math.sin(elapsed * 3.4 + drone.wobble) * path.sway;
       const sweep = (path.sweep || 0) * progress;
       const targetX = clamp(path.laneX + path.offsetX + arc + sweep + sway, 28, WIDTH - 28);
-      drone.x += (targetX - drone.x) * Math.min(1, dt * 7);
+      drone.x += (targetX - drone.x) * Math.min(1, dt * 7 * moveScale);
       drone.vx = targetX - drone.x;
     } else if (drone.type === "ufo") {
       if (drone.phase === "exit") {
@@ -3699,8 +3694,8 @@ function updateEnemies(dt) {
         drone.cooldown = 99;
       } else {
         const moveRate = drone.phase === "moving" || drone.phase === "arrive" ? 2.2 : 0.72;
-        drone.x += (drone.targetX - drone.x) * dt * moveRate;
-        drone.y += (drone.targetY - drone.y) * dt * moveRate + Math.sin(drone.wobble) * 0.28;
+        drone.x += (drone.targetX - drone.x) * dt * moveRate * moveScale;
+        drone.y += (drone.targetY - drone.y) * dt * moveRate * moveScale + Math.sin(drone.wobble) * 0.28 * moveScale;
         drone.vx *= 0.94;
         const settled = Math.abs(drone.x - drone.targetX) < 9 && Math.abs(drone.y - drone.targetY) < 9;
         if ((drone.phase === "arrive" || drone.phase === "moving") && settled) {
@@ -3710,32 +3705,32 @@ function updateEnemies(dt) {
       }
     } else if (drone.type === "splitterShard") {
       drone.lifetime -= dt;
-      drone.vy += 18 * dt;
-      drone.vx += Math.sin(drone.wobble) * 7 * dt;
+      drone.vy += 18 * dt * moveScale;
+      drone.vx += Math.sin(drone.wobble) * 7 * dt * moveScale;
       drone.vx *= 0.992;
       drone.vy *= 0.996;
-      drone.x += drone.vx * dt;
-      drone.y += drone.vy * dt;
+      drone.x += drone.vx * dt * moveScale;
+      drone.y += drone.vy * dt * moveScale;
       if (drone.lifetime <= 0) drone.exiting = true;
     } else if (drone.type === "splitter") {
       drone.splitBirth = Math.max(0, (drone.splitBirth || 0) - dt);
       const tier = drone.splitterTier || "L";
       const verticalPull = tier === "L" ? 0.58 : tier === "M" ? 0.74 : 0.92;
       const drift = tier === "L" ? 1.05 : tier === "M" ? 1.4 : 1.8;
-      drone.y += (drone.targetY - drone.y) * dt * verticalPull + Math.sin(drone.wobble) * drift + (drone.vy || 0) * dt;
-      drone.x += drone.vx * dt;
-      drone.vx += Math.sin(drone.wobble * 0.7) * (tier === "L" ? 9 : 14) * dt;
+      drone.y += ((drone.targetY - drone.y) * dt * verticalPull + Math.sin(drone.wobble) * drift + (drone.vy || 0) * dt) * moveScale;
+      drone.x += drone.vx * dt * moveScale;
+      drone.vx += Math.sin(drone.wobble * 0.7) * (tier === "L" ? 9 : 14) * dt * moveScale;
       drone.vx *= tier === "L" ? 0.998 : 0.992;
       if (drone.y > HEIGHT + 80) drone.exiting = true;
     } else {
-      drone.y += (drone.targetY - drone.y) * dt * 0.75 + Math.sin(drone.wobble) * (drone.type === "cargo" ? 0.35 : 0.55);
-      drone.x += drone.vx * dt;
+      drone.y += ((drone.targetY - drone.y) * dt * 0.75 + Math.sin(drone.wobble) * (drone.type === "cargo" ? 0.35 : 0.55)) * moveScale;
+      drone.x += drone.vx * dt * moveScale;
     }
     keepEnemyOffPlanet(drone);
     drone.suppressed = Math.max(0, (drone.suppressed || 0) - dt);
     drone.suppressionFlash = Math.max(0, (drone.suppressionFlash || 0) - dt);
-    drone.rootTimer = Math.max(0, (drone.rootTimer || 0) - dt);
-    if (drone.suppressed <= 0 && !rooted && drone.type !== "jet" && drone.type !== "mine") {
+    drone.slowTimer = Math.max(0, (drone.slowTimer || 0) - dt);
+    if (drone.suppressed <= 0 && drone.type !== "jet" && drone.type !== "mine") {
       drone.cooldown -= dt * (isFrenziedEnemy(drone) ? 1.35 : 1);
     }
     drone.shieldFlash = Math.max(0, (drone.shieldFlash || 0) - dt);
@@ -3750,9 +3745,7 @@ function updateEnemies(dt) {
     drone.impactSquash = Math.max(0, (drone.impactSquash || 0) - dt * 2.8);
     drone.armorFlash = Math.max(0, (drone.armorFlash || 0) - dt);
     if (drone.type === "jet") {
-      if (rooted) {
-        drone.fireInterval = Math.max(drone.fireInterval, 0.02);
-      } else if (drone.burstShots > 0) {
+      if (drone.burstShots > 0) {
         drone.fireInterval -= dt;
         if (drone.fireInterval <= 0) {
           const offset = drone.burstShots % 2 === 0 ? -7 : 7;
@@ -3784,7 +3777,7 @@ function updateEnemies(dt) {
           addFloatingText(drone.x, drone.y - 30, "LOCKED", "#ff5b74");
         }
       }
-    } else if (!rooted && drone.type !== "mine" && drone.cooldown <= 0) {
+    } else if (drone.type !== "mine" && drone.cooldown <= 0) {
       const angle = Math.atan2(player.y - drone.y, player.x - drone.x);
       if (drone.type === "mothership") {
         drone.cooldown = 99;
@@ -4125,7 +4118,7 @@ function resolveCollisions() {
         const result = damageDrone(drone, shot.power * streakDamageMultiplier(), shot.kind || "normal", projectileImpactAngle(shot, drone));
         registerStreakHit(shot.kind || "normal", shot.x, shot.y);
         if (shot.kind === "machinegun" && hasSOverdrive()) {
-          drone.rootTimer = Math.max(drone.rootTimer || 0, 0.45);
+          drone.slowTimer = Math.max(drone.slowTimer || 0, 0.45);
         }
         requestHitStop(shot.kind || "normal");
         shake = Math.max(shake, shot.kind === "shotgun" ? 0.06 : 0.035);
@@ -5045,11 +5038,11 @@ function drawPlayerFrenzyCue() {
 }
 
 function drawSuppressionEffect(drone) {
-  if ((!drone.suppressed || drone.suppressed <= 0) && (!drone.rootTimer || drone.rootTimer <= 0)) return;
+  if ((!drone.suppressed || drone.suppressed <= 0) && (!drone.slowTimer || drone.slowTimer <= 0)) return;
   const pulse = 0.5 + Math.sin(elapsed * 28 + drone.x) * 0.5;
   ctx.save();
   ctx.translate(drone.x, drone.y);
-  ctx.globalAlpha = clamp(Math.max(drone.suppressed || 0, drone.rootTimer || 0) / 0.85, 0.18, 0.72);
+  ctx.globalAlpha = clamp(Math.max(drone.suppressed || 0, drone.slowTimer || 0) / 0.85, 0.18, 0.72);
   ctx.strokeStyle = "#ff5b74";
   ctx.shadowColor = "#ff5b74";
   ctx.shadowBlur = 8 + pulse * 8;
@@ -5067,18 +5060,14 @@ function drawSuppressionEffect(drone) {
     ctx.lineTo(drone.r + 8, y + 3);
     ctx.stroke();
   }
-  if (drone.rootTimer > 0) {
-    ctx.globalAlpha = 0.4 + pulse * 0.22;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-drone.r - 12, drone.r + 10);
-    ctx.lineTo(drone.r + 12, drone.r + 10);
-    ctx.stroke();
-    for (let i = -1; i <= 1; i += 1) {
-      const x = i * 9;
+  if (drone.slowTimer > 0) {
+    ctx.globalAlpha = 0.35 + pulse * 0.2;
+    ctx.lineWidth = 1.6;
+    for (let i = -2; i <= 2; i += 1) {
+      const y = drone.r + 8 + i * 3;
       ctx.beginPath();
-      ctx.moveTo(x - 4, drone.r + 6);
-      ctx.lineTo(x + 4, drone.r + 14);
+      ctx.moveTo(-drone.r - 10 + Math.abs(i) * 3, y);
+      ctx.lineTo(drone.r + 10 - Math.abs(i) * 3, y);
       ctx.stroke();
     }
   }
