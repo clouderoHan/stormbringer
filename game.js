@@ -317,9 +317,8 @@ function awardScore(base, x, y, color = "#ffd166") {
   const multiplier = scoreMultiplier();
   const amount = Math.round(base * multiplier);
   score += amount;
-  const suffix = multiplier > 1 ? ` x${multiplier.toFixed(1).replace(".0", "")}` : "";
   if (Number.isFinite(x) && Number.isFinite(y)) {
-    addFloatingText(x, y, `+${amount}${suffix}`, color);
+    addFloatingText(x, y, `+${amount}`, color, multiplier > 1 ? { scoreMultiplier: `x${multiplier.toFixed(1).replace(".0", "")}` } : {});
   }
   return amount;
 }
@@ -1035,12 +1034,13 @@ function resetGame() {
   updateHud();
 }
 
-function addFloatingText(x, y, text, color = "#edf7f5") {
+function addFloatingText(x, y, text, color = "#edf7f5", options = {}) {
   floatingTexts.push({
     x,
     y,
     text,
     color,
+    scoreMultiplier: options.scoreMultiplier || "",
     life: 0.85,
     maxLife: 0.85,
   });
@@ -4875,8 +4875,6 @@ function drawPowerupInventory() {
 
 function drawTopScore() {
   const value = Math.round(score).toLocaleString();
-  const multiplier = scoreMultiplier();
-  const multiplierLabel = multiplier > 1 ? `x${multiplier.toFixed(1).replace(".0", "")}` : "";
   ctx.save();
   ctx.translate(WIDTH / 2, 24);
   ctx.fillStyle = "rgba(7, 16, 20, 0.48)";
@@ -4897,16 +4895,7 @@ function drawTopScore() {
   ctx.shadowColor = "#6df6d5";
   ctx.shadowBlur = 8;
   ctx.font = "900 17px ui-monospace, Consolas, monospace";
-  if (multiplierLabel) {
-    const scoreWidth = ctx.measureText(value).width;
-    ctx.fillText(value, -9, 8);
-    ctx.shadowBlur = 5;
-    ctx.fillStyle = "#ffd166";
-    ctx.font = "900 9px ui-monospace, Consolas, monospace";
-    ctx.fillText(multiplierLabel, scoreWidth / 2 + 7, 9);
-  } else {
-    ctx.fillText(value, 0, 8);
-  }
+  ctx.fillText(value, 0, 8);
   ctx.restore();
 }
 
@@ -5793,7 +5782,18 @@ function drawFloatingTexts() {
   floatingTexts.forEach((text) => {
     ctx.globalAlpha = clamp(text.life / text.maxLife, 0, 1);
     ctx.fillStyle = text.color;
-    ctx.fillText(text.text, text.x, text.y);
+    if (text.scoreMultiplier) {
+      ctx.font = "800 18px system-ui, sans-serif";
+      const mainWidth = ctx.measureText(text.text).width;
+      const suffix = ` ${text.scoreMultiplier}`;
+      ctx.fillText(text.text, text.x - 9, text.y);
+      ctx.font = "800 11px system-ui, sans-serif";
+      ctx.fillStyle = "#ffd166";
+      ctx.fillText(suffix, text.x - 9 + mainWidth / 2 + 12, text.y + 2);
+    } else {
+      ctx.font = "700 18px system-ui, sans-serif";
+      ctx.fillText(text.text, text.x, text.y);
+    }
   });
   ctx.restore();
 }
