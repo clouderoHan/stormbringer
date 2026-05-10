@@ -147,8 +147,10 @@ const DEFAULT_AUDIO_SETTINGS = {
   sfx: 0.55,
   music: 0.42,
 };
-const SUPPORT_TRAIL_COLORS = ["#ff5b74", "#ffd166", "#7cf7a8", "#6df6d5", "#8a7dff"];
+const SUPPORT_TRAIL_COLORS = ["#ff5b74", "#ffd166", "#6df6d5"];
 const SUPPORT_PATH_COLORS = ["#ff8aa0", "#ffe08a", "#a8ffd0", "#9bfff0", "#aaa2ff"];
+const SUPPORT_TRAIL_LIMIT = 120;
+const SUPPORT_TRAIL_INTERVAL = 0.055;
 const STREAK_LAYERS = [
   { grade: "D", color: "#6df6d5" },
   { grade: "C", color: "#7cf7a8" },
@@ -2384,6 +2386,8 @@ function spawnMissile(offset, source = player, options = {}) {
     target,
     life: options.life || 2.6,
     turn: options.turn || 8,
+    retargetTimer: options.retargetTimer ?? 0.18,
+    retargetInterval: options.retargetInterval ?? 0.18,
   });
 }
 
@@ -2406,6 +2410,7 @@ function callMissileSupport() {
       vy,
       offset: column,
       fireTimer: 0.12 + i * 0.08,
+      trailTimer: rand(0, SUPPORT_TRAIL_INTERVAL),
       life: 2.4,
       maxLife: 2.4,
       wobble: rand(0, Math.PI * 2),
@@ -2683,6 +2688,34 @@ function queuedUltimateTypes() {
   return types;
 }
 
+function hasUltimateTargets() {
+  if (boss && bossTargets().some((target) => target.kind === "torso" || (target.part && target.part.alive))) return true;
+  return drones.some((drone) => drone.type !== "mothership" && !drone.exiting && drone.hp > 0 && isDroneVulnerable(drone));
+}
+
+function spawnUltimatePayoffWave() {
+  if (boss || hasUltimateTargets()) return false;
+  const laneX = clamp(player ? player.x : WIDTH / 2, WIDTH * 0.24, WIDTH * 0.76);
+  for (let i = 0; i < 5; i += 1) {
+    const offset = i - 2;
+    spawnFormationFighter({
+      x: laneX + offset * 28,
+      y: -42 - Math.abs(offset) * 18,
+      laneX,
+      offsetX: offset * 28,
+      speed: 104,
+      arcAmp: 12,
+      arcPhase: offset * 0.18,
+      pattern: "chevron",
+      targetY: 120 + Math.abs(offset) * 8,
+    });
+  }
+  formationTimer = Math.max(formationTimer || 0, 2.6);
+  spawnTimer = Math.max(spawnTimer || 0, 1.1);
+  addFloatingText(WIDTH / 2, 72, "TARGETS INBOUND", "#ffd166");
+  return true;
+}
+
 function fireQueuedUltimate(type) {
   if (type === "nuke") {
     triggerMiniNuke();
@@ -2704,6 +2737,8 @@ function fireQueuedUltimate(type) {
 function beginUltimateCue() {
   const types = queuedUltimateTypes();
   const info = ultimateInfo[types[types.length - 1]] || ultimateInfo.burst;
+  const emptyScreen = !hasUltimateTargets();
+  const holdForTargets = emptyScreen && spawnUltimatePayoffWave();
   player.charge = minimumEnergy();
   const healed = healPlayer(1);
   ultimateCue = {
@@ -2712,9 +2747,11 @@ function beginUltimateCue() {
     types,
     label: types.map((type) => ultimateInfo[type].label).join(" + "),
     color: info.color,
-    timer: ULTIMATE_CUE_DURATION,
-    life: ULTIMATE_CUE_DURATION + 0.8,
-    maxLife: ULTIMATE_CUE_DURATION + 0.8,
+    timer: holdForTargets ? 0.9 : ULTIMATE_CUE_DURATION,
+    life: (holdForTargets ? 1.55 : ULTIMATE_CUE_DURATION + 0.8),
+    maxLife: (holdForTargets ? 1.55 : ULTIMATE_CUE_DURATION + 0.8),
+    holdForTargets,
+    holdTimer: holdForTargets ? 1.1 : 0,
     fired: false,
   };
   audio.ultimateCharge(info.sound);
@@ -2951,6 +2988,15 @@ function updateUltimateCue(dt) {
   ultimateCue.y += (player.y - ultimateCue.y) * 0.32;
   ultimateCue.timer -= dt;
   ultimateCue.life -= dt;
+  if (ultimateCue.holdForTargets && !ultimateCue.fired) {
+    ultimateCue.holdTimer = Math.max(0, (ultimateCue.holdTimer || 0) - dt);
+    if (!hasUltimateTargets() && ultimateCue.holdTimer > 0) {
+      ultimateCue.timer = Math.max(ultimateCue.timer, 0.08);
+      ultimateCue.life = Math.max(ultimateCue.life, ultimateCue.timer + 0.55);
+    } else {
+      ultimateCue.timer = Math.min(ultimateCue.timer, 0);
+    }
+  }
   if (!ultimateCue.fired && ultimateCue.timer <= 0) {
     ultimateCue.fired = true;
     ultimateCue.types.forEach((type) => fireQueuedUltimate(type));
@@ -3036,8 +3082,10 @@ function damageDrone(drone, amount, kind = "normal", impactAngle = -Math.PI / 2)
     if (drone.type === "cargo" && armorBefore > 0 && (drone.armor || 0) <= 0 && !drone.fleeing) {
       drone.fleeing = true;
       drone.fleeFlash = 0.75;
-      drone.vy = Math.max(drone.vy || 0, 132);
-      drone.targetY = Math.max(drone.targetY || drone.y, drone.y + 220);
+      drone.escapeDir = drone.x < WIDTH / 2 ? -1 : 1;
+      drone.vx = drone.escapeDir * 178;
+      drone.vy = Math.max(drone.vy || 0, 18);
+      drone.targetY = drone.y;
       addFloatingText(drone.x, drone.y - 30, "CARGO FLEEING", "#ffd166");
       addRingBurst(drone.x, drone.y, "#ffd166", 18, 10, 230, 2.8);
     }
@@ -3597,7 +3645,7 @@ function updateEnemies(dt) {
     }
     const rooted = isDroneRooted(drone);
     if (!rooted && !drone.exiting && ENEMY_FORWARD_DRIFT[drone.type]) {
-      const driftSpeed = drone.type === "cargo" && drone.fleeing ? ENEMY_FORWARD_DRIFT.cargo * 2.85 : ENEMY_FORWARD_DRIFT[drone.type];
+      const driftSpeed = drone.type === "cargo" && drone.fleeing ? 10 : ENEMY_FORWARD_DRIFT[drone.type];
       const drift = driftSpeed * dt;
       drone.y += drift;
       drone.targetY = Math.min(HEIGHT + 90, (drone.targetY || drone.y) + drift);
@@ -3617,6 +3665,15 @@ function updateEnemies(dt) {
       drone.targetY = drone.y;
     } else if (drone.type === "mine") {
       // Mines are fixed in space; only the player's forward motion carries them down-screen.
+    } else if (drone.type === "cargo" && drone.fleeing) {
+      drone.vx += (drone.escapeDir || (drone.x < WIDTH / 2 ? -1 : 1)) * 230 * dt;
+      drone.vx = clamp(drone.vx, -300, 300);
+      drone.x += drone.vx * dt;
+      drone.y += Math.sin(drone.wobble) * 0.45 + (drone.vy || 0) * dt;
+      drone.cooldown = 99;
+      if (drone.x < -48 || drone.x > WIDTH + 48) {
+        drone.exiting = true;
+      }
     } else if (drone.type === "jet") {
       drone.x += (drone.targetX - drone.x) * dt * 2.4;
       drone.y += (drone.targetY - drone.y) * dt * 2.4 + Math.sin(drone.wobble) * 0.25;
@@ -3884,19 +3941,26 @@ function updateProjectiles(dt) {
     ship.wobble += dt * 7;
     ship.x += ship.vx * dt;
     ship.y += ship.vy * dt + Math.sin(ship.wobble) * 0.8;
-    const travelAngle = Math.atan2(ship.vy, ship.vx);
-    const trailX = ship.x - Math.cos(travelAngle) * 18;
-    const trailY = ship.y - Math.sin(travelAngle) * 18;
-    SUPPORT_TRAIL_COLORS.forEach((color, index) => {
-      supportTrails.push({
-        x: trailX + (index - 2) * 3.4 + rand(-1.2, 1.2),
-        y: trailY + rand(-1.5, 1.5),
-        color,
-        life: 0.42,
-        maxLife: 0.42,
-        size: 3.2 - Math.abs(index - 2) * 0.25,
+    ship.trailTimer = (ship.trailTimer || 0) - dt;
+    if (ship.trailTimer <= 0) {
+      ship.trailTimer += SUPPORT_TRAIL_INTERVAL;
+      const travelAngle = Math.atan2(ship.vy, ship.vx);
+      const trailX = ship.x - Math.cos(travelAngle) * 18;
+      const trailY = ship.y - Math.sin(travelAngle) * 18;
+      SUPPORT_TRAIL_COLORS.forEach((color, index) => {
+        supportTrails.push({
+          x: trailX + (index - 1) * 3.8 + rand(-1.2, 1.2),
+          y: trailY + rand(-1.5, 1.5),
+          color,
+          life: 0.36,
+          maxLife: 0.36,
+          size: 3.1 - Math.abs(index - 1) * 0.25,
+        });
       });
-    });
+      if (supportTrails.length > SUPPORT_TRAIL_LIMIT) {
+        supportTrails.splice(0, supportTrails.length - SUPPORT_TRAIL_LIMIT);
+      }
+    }
     const canFireSupportMissiles = ship.y <= HEIGHT * 0.55;
     if (canFireSupportMissiles) {
       ship.fireTimer -= dt;
@@ -3908,6 +3972,8 @@ function updateProjectiles(dt) {
         power: 2.1,
         life: 2.9,
         turn: 10.5,
+        retargetTimer: 0.16,
+        retargetInterval: 0.22,
       });
       const muzzleAngle = Math.atan2(ship.vy, ship.vx);
       addMuzzleBlast(ship.x + Math.cos(muzzleAngle) * 16, ship.y + Math.sin(muzzleAngle) * 16, {
@@ -3927,6 +3993,9 @@ function updateProjectiles(dt) {
     trail.y += 36 * dt;
   });
   supportTrails = supportTrails.filter((trail) => trail.life > 0);
+  if (supportTrails.length > SUPPORT_TRAIL_LIMIT) {
+    supportTrails.splice(0, supportTrails.length - SUPPORT_TRAIL_LIMIT);
+  }
   supportPathLanes.forEach((lane) => {
     lane.life -= dt;
     lane.phase += dt * 2.4;
@@ -3936,8 +4005,11 @@ function updateProjectiles(dt) {
   missiles.forEach((missile) => {
     const targetIsBoss = missile.target === boss && boss;
     const shouldPreferEnemy = missile.target && missile.target.type === "mothership" && hasVulnerableNonPlanetEnemy();
-    if (!missile.target || missile.target.hp <= 0 || shouldPreferEnemy || (!targetIsBoss && !drones.includes(missile.target))) {
+    missile.retargetTimer = Math.max(0, (missile.retargetTimer || 0) - dt);
+    const needsTarget = !missile.target || missile.target.hp <= 0 || shouldPreferEnemy || (!targetIsBoss && !drones.includes(missile.target));
+    if (needsTarget && missile.retargetTimer <= 0) {
       missile.target = nearestDrone(missile.x, missile.y);
+      missile.retargetTimer = missile.retargetInterval || 0.18;
     }
     if (missile.target) {
       const desired = Math.atan2(missile.target.y - missile.y, missile.target.x - missile.x);
@@ -5273,7 +5345,8 @@ function drawCargoShip(drone) {
   ctx.save();
   ctx.translate(drone.x, drone.y);
   applyDroneImpactTransform(drone);
-  ctx.rotate(drone.vx < 0 ? Math.PI : 0);
+  const facingLeft = fleeing ? (drone.escapeDir || drone.vx) < 0 : drone.vx < 0;
+  ctx.rotate(facingLeft ? Math.PI : 0);
   if (fleeing) {
     ctx.shadowColor = "#ffd166";
     ctx.shadowBlur = 10 + fleePulse * 10;
@@ -6634,8 +6707,6 @@ function draw() {
     ctx.globalCompositeOperation = "lighter";
     ctx.globalAlpha = t * 0.42;
     ctx.fillStyle = trail.color;
-    ctx.shadowColor = trail.color;
-    ctx.shadowBlur = 10;
     ctx.beginPath();
     ctx.ellipse(trail.x, trail.y, trail.size * (1.2 + (1 - t) * 2.2), trail.size, 0, 0, Math.PI * 2);
     ctx.fill();
