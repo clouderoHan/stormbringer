@@ -2231,12 +2231,9 @@ function currentSpawnDelay() {
   return Math.max(0.54, 1.16 - wave * 0.058);
 }
 
-function startBreather(duration = 2.4, label = "COLLECT") {
+function startBreather(duration = 2.4) {
   breatherTimer = Math.max(breatherTimer || 0, duration);
   spawnTimer = Math.max(spawnTimer || 0, Math.min(duration, 1.1));
-  if (label) {
-    addFloatingText(WIDTH / 2, 86, label, "#6df6d5");
-  }
 }
 
 function scheduleThreat(type, delay, label, color, themeKey = currentWaveTheme().key) {
@@ -2251,17 +2248,17 @@ function executePendingThreat() {
   pendingThreat = null;
   if (threat.type === "formation") {
     const spawned = spawnFighterFormation(threat.themeKey);
-    if (spawned) startBreather(2.4, "LOOT WINDOW");
+    if (spawned) startBreather(2.4);
     return spawned;
   }
   if (threat.type === "minefield") {
     const spawned = spawnMinefield();
-    if (spawned) startBreather(2.8, "THREAD THE MINES");
+    if (spawned) startBreather(2.8);
     return spawned;
   }
   if (threat.type === "planet") {
     spawnMothership();
-    startBreather(2.2, "FRENZY WINDOW");
+    startBreather(2.2);
     return true;
   }
   if (threat.type === "boss") {
@@ -2271,7 +2268,7 @@ function executePendingThreat() {
   if (threat.type === "jet") return spawnFighterJet();
   if (threat.type === "splitter") {
     const spawned = spawnSplitter();
-    if (spawned) startBreather(2.1, "CLEAN SPLITS");
+    if (spawned) startBreather(2.1);
     return spawned;
   }
   if (threat.type === "cargo") return spawnCargoShip();
@@ -3561,7 +3558,7 @@ function updateEnemies(dt) {
   const activeThreatCount = drones.filter((drone) => !drone.exiting && drone.hp > 0 && drone.type !== "mothership").length;
   if (!boss && !pendingThreat && breatherTimer <= 0 && lootBreatherCooldown <= 0 && activeThreatCount <= 1 && (shards.length + powerups.length) >= 3) {
     lootBreatherCooldown = 8;
-    startBreather(1.8, "COLLECT");
+    startBreather(1.8);
   }
 
   drones.forEach((drone) => {
@@ -4459,8 +4456,6 @@ function update(dt) {
   wave = Math.max(wave, 1 + Math.floor(elapsed / 28));
   if (wave !== announcedWave) {
     announcedWave = wave;
-    const theme = currentWaveTheme();
-    addFloatingText(WIDTH / 2, 72, `WAVE ${wave}: ${theme.label}`, theme.color);
   }
   shake = Math.max(0, shake - dt);
   updatePlayerDamageFeedback(dt);
