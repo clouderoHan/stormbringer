@@ -52,6 +52,7 @@ let boss = null;
 let shards = [];
 let powerups = [];
 let missiles = [];
+let missileTrails = [];
 let particles = [];
 let floatingTexts = [];
 let shieldTransfers = [];
@@ -151,6 +152,8 @@ const SUPPORT_TRAIL_COLORS = ["#ff5b74", "#ffd166", "#6df6d5"];
 const SUPPORT_PATH_COLORS = ["#ff8aa0", "#ffe08a", "#a8ffd0", "#9bfff0", "#aaa2ff"];
 const SUPPORT_TRAIL_LIMIT = 120;
 const SUPPORT_TRAIL_INTERVAL = 0.055;
+const MISSILE_TRAIL_LIMIT = 150;
+const MISSILE_TRAIL_INTERVAL = 0.035;
 const STREAK_LAYERS = [
   { grade: "D", color: "#6df6d5" },
   { grade: "C", color: "#7cf7a8" },
@@ -194,8 +197,7 @@ const currentStreakDecayRate = () => STREAK_DECAY_BY_LEVEL[currentStreakLevel()]
 const inventorySlotCount = () => (currentStreakLevel() >= 5 ? 4 : currentStreakLevel() >= 4 ? 3 : currentStreakLevel() >= 3 ? 2 : 1);
 const currentWaveTheme = () => WAVE_THEMES[(wave - 1) % WAVE_THEMES.length];
 const hasSStreak = () => currentStreakLevel() >= STREAK_LAYERS.length;
-const hasEnergyFloor = () => currentStreakLevel() >= 4;
-const minimumEnergy = () => (hasSStreak() ? 2 : hasEnergyFloor() ? 1 : 0);
+const minimumEnergy = () => (hasSStreak() ? 1 : 0);
 
 function splitterStats(tier = "L") {
   if (tier === "S") return { tier: "S", next: null, radius: 12, hp: 1.6, speed: 130, cooldown: [1.45, 2.05], reward: 95, color: "#ff5b74" };
@@ -960,6 +962,7 @@ function resetGame() {
   shards = [];
   powerups = [];
   missiles = [];
+  missileTrails = [];
   particles = [];
   floatingTexts = [];
   shieldTransfers = [];
@@ -2388,6 +2391,7 @@ function spawnMissile(offset, source = player, options = {}) {
     turn: options.turn || 8,
     retargetTimer: options.retargetTimer ?? 0.18,
     retargetInterval: options.retargetInterval ?? 0.18,
+    trailTimer: rand(0, MISSILE_TRAIL_INTERVAL),
   });
 }
 
@@ -4003,6 +4007,23 @@ function updateProjectiles(dt) {
   supportPathLanes = supportPathLanes.filter((lane) => lane.life > 0);
 
   missiles.forEach((missile) => {
+    missile.trailTimer = (missile.trailTimer || 0) - dt;
+    if (missile.trailTimer <= 0) {
+      missile.trailTimer += MISSILE_TRAIL_INTERVAL;
+      const angle = Math.atan2(missile.vy, missile.vx);
+      missileTrails.push({
+        x: missile.x - Math.cos(angle) * 10 + rand(-1.2, 1.2),
+        y: missile.y - Math.sin(angle) * 10 + rand(-1.2, 1.2),
+        angle,
+        life: 0.28,
+        maxLife: 0.28,
+        size: missile.r || 6,
+        color: hasSOverdrive() ? "#8a7dff" : "#ffd166",
+      });
+      if (missileTrails.length > MISSILE_TRAIL_LIMIT) {
+        missileTrails.splice(0, missileTrails.length - MISSILE_TRAIL_LIMIT);
+      }
+    }
     const targetIsBoss = missile.target === boss && boss;
     const shouldPreferEnemy = missile.target && missile.target.type === "mothership" && hasVulnerableNonPlanetEnemy();
     missile.retargetTimer = Math.max(0, (missile.retargetTimer || 0) - dt);
@@ -4026,6 +4047,14 @@ function updateProjectiles(dt) {
     missile.y += missile.vy * dt;
     missile.life -= dt;
   });
+  missileTrails.forEach((trail) => {
+    trail.life -= dt;
+    trail.y += 18 * dt;
+  });
+  missileTrails = missileTrails.filter((trail) => trail.life > 0);
+  if (missileTrails.length > MISSILE_TRAIL_LIMIT) {
+    missileTrails.splice(0, missileTrails.length - MISSILE_TRAIL_LIMIT);
+  }
 
   bullets = bullets.filter((bullet) => (typeof bullet.life !== "number" || bullet.life > 0) && bullet.x > -36 && bullet.x < WIDTH + 36 && bullet.y > -36 && bullet.y < HEIGHT + 36);
   playerShots = playerShots.filter((shot) => shot.y > -30 && (typeof shot.life !== "number" || shot.life > 0));
@@ -6693,12 +6722,31 @@ function draw() {
     }
   });
 
-  missiles.forEach((missile) => {
-    drawMissile(missile);
-  });
-
   supportPathLanes.forEach((lane) => {
     drawSupportPathLane(lane);
+  });
+
+  missileTrails.forEach((trail) => {
+    const t = clamp(trail.life / trail.maxLife, 0, 1);
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = t * 0.36;
+    ctx.translate(trail.x, trail.y);
+    ctx.rotate(trail.angle);
+    ctx.fillStyle = trail.color;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, trail.size * (1.45 + (1 - t) * 1.7), trail.size * 0.42, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#edf7f5";
+    ctx.globalAlpha = t * 0.18;
+    ctx.beginPath();
+    ctx.ellipse(-trail.size * 0.25, 0, trail.size * 0.75, trail.size * 0.22, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+
+  missiles.forEach((missile) => {
+    drawMissile(missile);
   });
 
   supportTrails.forEach((trail) => {
