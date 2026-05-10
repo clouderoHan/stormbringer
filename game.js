@@ -161,16 +161,40 @@ const STREAK_LAYERS = [
   { grade: "A", color: "#ff8c42" },
   { grade: "S", color: "#ff5b74" },
 ];
-const STREAK_CHARGE_PER_LAYER = 1.7;
-const STREAK_DECAY_BY_LEVEL = [0, 0.16, 0.22, 0.28, 0.34, 0.42];
+const STREAK_CHARGE_PER_LAYER = 2.05;
+const STREAK_DECAY_BY_LEVEL = [0, 0.18, 0.27, 0.38, 0.54, 0.78];
 const WAVE_THEMES = [
   { key: "formation", label: "Fighter Formation", color: "#ffd166" },
   { key: "ufo", label: "UFO Crossfire", color: "#8a7dff" },
   { key: "mine", label: "Mine Corridor", color: "#ff5b74" },
-  { key: "jet", label: "Jet Ambush", color: "#edf7f5" },
   { key: "cargo", label: "Cargo Rush", color: "#ffd166" },
+  { key: "jet", label: "Jet Ambush", color: "#edf7f5" },
   { key: "mixed", label: "Assault Mix", color: "#6df6d5" },
 ];
+const WAVE_PACE_PRESETS = {
+  current: {
+    formation: 1,
+    ufo: 2,
+    minefield: 2,
+    jet: 3,
+    cargo: 3,
+    planet: 1,
+    splitter: 4,
+    boss: 10,
+  },
+  staged: {
+    formation: 1,
+    ufo: 2,
+    minefield: 3,
+    cargo: 4,
+    jet: 5,
+    planet: 6,
+    splitter: 7,
+    boss: 10,
+  },
+};
+const ACTIVE_WAVE_PACE = WAVE_PACE_PRESETS.staged;
+const isWaveUnlocked = (type) => wave >= (ACTIVE_WAVE_PACE[type] || 1);
 const debugKeyEntries = [
   { mark: "`", title: "Debug Overlay", text: "Show or hide live run stats.", tip: "Use this when tuning waves, drops, bullets, and boss state.", color: "#6df6d5" },
   { mark: "B", title: "Start Boss", text: "Immediately brings in the first boss if no boss is active.", tip: "Bosses normally arrive through the wave schedule.", color: "#ff5b74" },
@@ -353,24 +377,24 @@ function refreshStreakDecay() {
 }
 
 function registerStreakHit(kind = "normal", x, y) {
-  const amount = kind === "shotgun" ? 0.026 : kind === "missile" ? 0.02 : kind === "machinegun" || kind === "lockdown" || kind === "sweeper" ? 0.006 : kind === "ultimate" ? 0.03 : 0.013;
+  const amount = kind === "shotgun" ? 0.019 : kind === "missile" ? 0.015 : kind === "machinegun" || kind === "lockdown" || kind === "sweeper" ? 0.004 : kind === "ultimate" ? 0.022 : kind === "laser" ? 0.01 : 0.01;
   addStreakCharge(amount, x, y, false);
 }
 
 function registerStreakKill(type, x, y) {
   const chunks = {
-    ship: 0.18,
-    jet: 0.5,
-    splitterShard: 0.05,
-    splitter: 0.38,
-    ufo: 0.48,
-    mine: 0.16,
-    cargo: 0.72,
-    mothership: 1.05,
-    bossCannon: 0.85,
-    boss: 1.45,
+    ship: 0.14,
+    jet: 0.38,
+    splitterShard: 0.035,
+    splitter: 0.28,
+    ufo: 0.36,
+    mine: 0.12,
+    cargo: 0.55,
+    mothership: 0.82,
+    bossCannon: 0.68,
+    boss: 1.15,
   };
-  addStreakCharge(chunks[type] || 0.42, x, y, true);
+  addStreakCharge(chunks[type] || 0.32, x, y, true);
   refreshStreakDecay();
   const level = currentStreakLevel();
   if (level > 0) {
@@ -419,7 +443,9 @@ function debugSetSStreak() {
   lastInventorySlotCount = inventorySlotCount();
   bestStreakLevel = STREAK_LAYERS.length;
   player.charge = Math.max(player.charge, minimumEnergy());
-  addFloatingText(player.x, player.y - 48, "S STREAK", STREAK_LAYERS[STREAK_LAYERS.length - 1].color);
+  if (debugVisible) {
+    addFloatingText(player.x, player.y - 48, "S STREAK", STREAK_LAYERS[STREAK_LAYERS.length - 1].color);
+  }
   addRingBurst(player.x, player.y, STREAK_LAYERS[STREAK_LAYERS.length - 1].color, 24, 18, 360, 3.5);
   updateHud();
 }
@@ -1000,7 +1026,7 @@ function resetGame() {
     sRankTime: 0,
     kills: emptyKills(),
   };
-  nextBossWave = 10;
+  nextBossWave = ACTIVE_WAVE_PACE.boss;
   wave = 1;
   announcedWave = 1;
   elapsed = 0;
@@ -1041,6 +1067,8 @@ function addFloatingText(x, y, text, color = "#edf7f5", options = {}) {
     text,
     color,
     scoreMultiplier: options.scoreMultiplier || "",
+    suffix: options.suffix || "",
+    suffixColor: options.suffixColor || color,
     life: 0.85,
     maxLife: 0.85,
   });
@@ -1073,9 +1101,17 @@ function updateHud() {
   }
   if (scoreText) scoreText.textContent = Math.round(score).toLocaleString();
   const layer = currentStreakLayer();
-  streakText.innerHTML = `<span>Streak</span><b>${layer ? layer.grade : "-"}</b>`;
+  let streakLabel = streakText.querySelector("span");
+  let streakGrade = streakText.querySelector("b");
+  if (!streakLabel || !streakGrade) {
+    streakText.innerHTML = "<span>Streak</span><b>-</b>";
+    streakLabel = streakText.querySelector("span");
+    streakGrade = streakText.querySelector("b");
+  }
+  streakGrade.textContent = layer ? layer.grade : "-";
   streakText.style.color = layer ? layer.color : "#edf7f5";
   streakText.style.opacity = layer ? 1 : 0.55;
+  streakText.classList.toggle("s-rank", hasSStreak());
   streakFill.style.width = `${currentStreakProgress() * 100}%`;
   streakFill.style.background = layer ? layer.color : "rgba(237, 247, 245, 0.28)";
   streakFill.style.color = layer ? layer.color : "rgba(237, 247, 245, 0.28)";
@@ -1338,7 +1374,6 @@ function applyMissileSplash(missile, primaryTarget = null) {
     life: 0.28,
     maxLife: 0.28,
   });
-  addFloatingText(missile.x, missile.y - 18, "SPLASH", "#8a7dff");
   addRingBurst(missile.x, missile.y, "#8a7dff", 28, 6, 340, 3.4);
   addRingBurst(missile.x, missile.y, "#edf7f5", 14, radius * 0.25, 220, 2.2);
   addParticles(missile.x, missile.y, "#8a7dff", 26, 260);
@@ -1377,7 +1412,6 @@ function applyMineBlast(mine) {
     life: 0.24,
     maxLife: 0.24,
   });
-  addFloatingText(mine.x, mine.y - 20, "BLAST", "#ffd166");
   addRingBurst(mine.x, mine.y, "#ff5b74", 30, 8, 390, 3.8);
   addRingBurst(mine.x, mine.y, "#ffd166", 18, radius * 0.18, 260, 2.6);
   addParticles(mine.x, mine.y, "#ff5b74", 28, 290);
@@ -1408,7 +1442,6 @@ function applyMineBlast(mine) {
     });
   }
   if (enemyHits > 0) {
-    addFloatingText(mine.x, mine.y - 42, enemyHits >= 3 ? "CHAIN BLAST" : "MINE HIT", "#ffd166");
     addRingBurst(mine.x, mine.y, "#ffd166", 18 + enemyHits * 3, radius * 0.22, 260, 3);
   }
 }
@@ -1868,7 +1901,9 @@ function spawnDebugMothershipPack() {
       flash: 0,
     });
   }
-  addFloatingText(WIDTH / 2, 72, `${mother.name} TEST`, FRENZY_AURA_COLOR);
+  if (debugVisible) {
+    addFloatingText(WIDTH / 2, 72, `${mother.name} TEST`, FRENZY_AURA_COLOR);
+  }
 }
 
 function spawnFirstBoss() {
@@ -2197,16 +2232,21 @@ function spawnSplitter() {
   const side = Math.random() < 0.5 ? -30 : WIDTH + 30;
   const stats = splitterStats("L");
   const maxHp = stats.hp + Math.floor(wave / 6);
+  const maxShield = 3.8 + wave * 0.14;
   drones.push({
     x: side,
-    y: rand(120, HEIGHT * 0.34),
-    vx: side < 0 ? rand(58, stats.speed) : rand(-stats.speed, -58),
-    targetY: rand(135, HEIGHT * 0.38),
+    y: rand(118, HEIGHT * 0.32),
+    vx: side < 0 ? rand(145, 185) : rand(-185, -145),
+    targetX: clamp(WIDTH / 2 + rand(-70, 70), 96, WIDTH - 96),
+    targetY: rand(160, HEIGHT * 0.42),
     r: stats.radius,
     type: "splitter",
     splitterTier: "L",
     hp: maxHp,
     maxHp,
+    shield: maxShield,
+    maxShield,
+    shieldDelay: 1,
     cooldown: rand(stats.cooldown[0], stats.cooldown[1]),
     wobble: rand(0, Math.PI * 2),
     flash: 0,
@@ -2223,8 +2263,8 @@ function spawnSplitterChildren(drone) {
     const speed = childStats.speed + rand(-12, 18);
     const maxHp = childStats.hp + (childStats.tier === "M" ? Math.floor(wave / 8) : 0);
     drones.push({
-      x: drone.x + Math.cos(angle) * (drone.r * 0.48),
-      y: drone.y + Math.sin(angle) * (drone.r * 0.48),
+      x: clamp(drone.x + Math.cos(angle) * (drone.r * 0.48), 34, WIDTH - 34),
+      y: clamp(drone.y + Math.sin(angle) * (drone.r * 0.48), 72, HEIGHT - 44),
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed * 0.38,
       targetY: drone.y + rand(95, 165),
@@ -2246,7 +2286,7 @@ function spawnSplitterChildren(drone) {
 }
 
 function currentSpawnDelay() {
-  return Math.max(0.54, 1.16 - wave * 0.058);
+  return Math.max(0.48, 1.08 - wave * 0.062);
 }
 
 function startBreather(duration = 2.4) {
@@ -2349,7 +2389,9 @@ function spawnDebugPowerup(type) {
   const x = clamp(player.x + rand(-28, 28), 28, WIDTH - 28);
   const y = clamp(player.y - 54 + rand(-16, 16), 28, HEIGHT - 28);
   spawnPowerup(x, y, type);
-  addFloatingText(x, y - 20, powerupInfo[type].letter, powerupInfo[type].color);
+  if (debugVisible) {
+    addFloatingText(x, y - 20, powerupInfo[type].letter, powerupInfo[type].color);
+  }
 }
 
 function nearestDrone(x, y) {
@@ -2506,7 +2548,6 @@ function spawnRadialBlast() {
       fireShot(player.x, player.y, angle, speed, 5, 1.45, "#6df6d5", "ultimate", 0.92 + waveIndex * 0.18);
     }
   }
-  addFloatingText(player.x, player.y - 34, "3-FOLD SHOT", "#6df6d5");
   addParticles(player.x, player.y, "#6df6d5", 48, 310);
   shake = Math.max(shake, 0.16);
 }
@@ -2521,7 +2562,6 @@ function spawnSixfoldBlast() {
       fireShot(player.x, player.y, angle, speed, 5, 1.65, "#6df6d5", "ultimate", 1.15 + waveIndex * 0.13);
     }
   }
-  addFloatingText(player.x, player.y - 34, "6-FOLD SHOT", "#6df6d5");
   addParticles(player.x, player.y, "#6df6d5", 86, 380);
   shake = Math.max(shake, 0.24);
 }
@@ -2555,7 +2595,6 @@ function triggerMiniNuke() {
     life: 0.95,
     maxLife: 0.95,
   });
-  addFloatingText(player.x, player.y - 34, "NUKE", "#ffd166");
   addParticles(player.x, player.y, "#ffd166", 130, 520);
   addParticles(player.x, player.y, "#edf7f5", 60, 440);
   shake = Math.max(shake, 0.46);
@@ -2589,7 +2628,6 @@ function triggerBreachBlast() {
     });
   }
   addMuzzleBlast(player.x, player.y - 18, { angle: -Math.PI / 2, color: "#ffd166", coreColor: "#edf7f5", type: "cone", size: 2.25, life: 0.28 });
-  addFloatingText(player.x, player.y - 34, "BREACH BLAST", "#ffd166");
   addParticles(player.x, player.y - 20, "#ffd166", 58, 340);
   addParticles(player.x, player.y - 20, "#edf7f5", 22, 260);
   shake = Math.max(shake, 0.28);
@@ -2605,7 +2643,6 @@ function triggerRapidMissiles() {
   }
   player.rapidMissileTimer = 0.95;
   missileTimer = 0;
-  addFloatingText(player.x, player.y - 34, "MISSILE STORM", "#8a7dff");
   addParticles(player.x, player.y, "#8a7dff", 34, 260);
   shake = Math.max(shake, 0.12);
 }
@@ -2614,7 +2651,6 @@ function triggerBulletSweep() {
   audio.ultimate("missiles");
   player.lockdownTimer = 2;
   machineGunTimer = 0;
-  addFloatingText(player.x, player.y - 34, "RICOCHET SWEEP", "#ff5b74");
   addParticles(player.x, player.y, "#ff5b74", 52, 300);
   shake = Math.max(shake, 0.16);
 }
@@ -2624,7 +2660,6 @@ function triggerLanceSweep() {
   player.laserUltimateTimer = 2;
   player.laserUltimateMax = 2;
   laserTickTimer = 0.24;
-  addFloatingText(player.x, player.y - 34, "LASER OVERDRIVE", "#2fd46f");
   addParticles(player.x, player.y - 24, "#2fd46f", 42, 260);
   addRingBurst(player.x, player.y - 20, "#2fd46f", 24, 7, 260, 3.2);
   shake = Math.max(shake, 0.16);
@@ -2679,7 +2714,8 @@ function collectPowerup(type) {
   if (activeWeaponInSlot(info.slot)) {
     if (player.inventory.length < inventorySlotCount()) {
       player.inventory.push(type);
-      addFloatingText(player.x, player.y - 28, `STORED ${info.letter}`, info.color);
+      const label = type === "machinegun" ? "MACHINE GUN" : type.toUpperCase();
+      addFloatingText(player.x, player.y - 28, label, info.color, { suffix: "STORED", suffixColor: "rgba(237, 247, 245, 0.82)" });
       audio.pickup(type);
       return true;
     }
@@ -2773,9 +2809,6 @@ function beginUltimateCue() {
   };
   audio.ultimateCharge(info.sound);
   addFloatingText(player.x, player.y - 42, ultimateCue.label, info.color);
-  if (!healed) {
-    addFloatingText(player.x, player.y - 62, "HULL FULL", "#7cf7a8");
-  }
   addRingBurst(player.x, player.y, info.color, 20, 8, 210, 3);
   shake = Math.max(shake, 0.08);
 }
@@ -3148,7 +3181,7 @@ function destroyDrone(drone, grantCharge = true) {
   registerStreakKill(drone.type, drone.x, drone.y);
   const reward = drone.type === "mothership" ? 1600 : drone.type === "cargo" ? 520 : drone.type === "jet" ? 420 : drone.type === "splitter" ? splitterStats(drone.splitterTier || "L").reward : drone.type === "mine" ? 120 : drone.type === "splitterShard" ? 60 : 250;
   const toughness = Math.max(0, drone.maxHp - 3);
-  const energyChance = clamp(0.34 + toughness * 0.055 + (drone.type === "ufo" ? 0.08 : drone.type === "jet" ? 0.06 : 0), 0.34, 0.78);
+  const energyChance = clamp(0.22 + toughness * 0.04 + (drone.type === "ufo" ? 0.06 : drone.type === "jet" ? 0.045 : 0), 0.2, 0.58);
   const powerupChance = clamp(0.12 + toughness * 0.018 + (drone.type === "ufo" ? 0.04 : drone.type === "jet" ? 0.03 : 0), 0.12, 0.27);
   awardScore(reward, drone.x, drone.y - 18, "#ffd166");
   if (drone.type === "splitter") {
@@ -3286,7 +3319,6 @@ function resolveBulletClearingShots() {
         addParticles(bullet.x, bullet.y, color, bullet.laser ? 16 : ultimateClear ? 9 : 7, bullet.laser ? 220 : 150);
         addParticles(bullet.x, bullet.y, "#edf7f5", bullet.laser ? 7 : 4, 120);
         addRingBurst(bullet.x, bullet.y, bullet.laser ? "#ffd166" : "#ff5b74", ultimateClear ? 14 : 10, bullet.laser ? 7 : 4, 190, 2.2);
-        addFloatingText(bullet.x, bullet.y - 10, bullet.laser ? "LASER CUT" : "CUT", color);
       }
     });
   });
@@ -3553,7 +3585,7 @@ function updatePlayer(dt) {
 }
 
 function updateEnemies(dt) {
-  if (!boss && wave >= nextBossWave && (!pendingThreat || pendingThreat.type !== "boss")) {
+  if (!boss && isWaveUnlocked("boss") && wave >= nextBossWave && (!pendingThreat || pendingThreat.type !== "boss")) {
     scheduleThreat("boss", 1.15, "BOSS SIGNAL", "#ff5b74");
   }
   const theme = currentWaveTheme();
@@ -3571,8 +3603,8 @@ function updateEnemies(dt) {
   }
   spawnTimer -= dt;
   if (!boss && !pendingThreat && breatherTimer <= 0 && spawnTimer <= 0) {
-    const canFormation = wave >= 1 && formationTimer <= 0 && !activeMothership() && activeEnemyCount("ship") <= 12;
-    const canMinefield = wave >= 2 && minefieldTimer <= 0 && activeEnemyCount("mine") <= 5;
+    const canFormation = isWaveUnlocked("formation") && formationTimer <= 0 && !activeMothership() && activeEnemyCount("ship") <= 12;
+    const canMinefield = isWaveUnlocked("minefield") && minefieldTimer <= 0 && activeEnemyCount("mine") <= 5;
     let didFormation = false;
     if ((themeKey === "formation" || (themeKey === "mixed" && Math.random() < 0.45) || Math.random() < 0.2) && canFormation) {
       didFormation = true;
@@ -3582,31 +3614,31 @@ function updateEnemies(dt) {
       didFormation = true;
       minefieldTimer = rand(MINEFIELD_SPAWN_DELAY[0], MINEFIELD_SPAWN_DELAY[1]);
       scheduleThreat("minefield", 0.95, "MINEFIELD AHEAD", "#ff5b74", themeKey);
-    } else if (mothershipSpawnCooldown <= 0 && !activeMothership() && Math.random() < 0.11) {
+    } else if (isWaveUnlocked("planet") && mothershipSpawnCooldown <= 0 && !activeMothership() && Math.random() < 0.11) {
       scheduleThreat("planet", 1.0, "PLANETARY FIELD", FRENZY_AURA_COLOR, themeKey);
       mothershipSpawnCooldown = 24;
-    } else if (wave >= 3 && activeEnemyCount("jet") < 2 && Math.random() < (themeKey === "jet" ? 0.58 : 0.28)) {
+    } else if (isWaveUnlocked("jet") && activeEnemyCount("jet") < 2 && Math.random() < (themeKey === "jet" ? 0.58 : 0.28)) {
       scheduleThreat("jet", 0.7, "JET LOCKERS", "#edf7f5", themeKey);
-    } else if (wave >= 4 && activeEnemyCount("splitter") < SPLITTER_MAX_ACTIVE && Math.random() < (themeKey === "mixed" ? 0.52 : 0.42)) {
+    } else if (isWaveUnlocked("splitter") && activeEnemyCount("splitter") < SPLITTER_MAX_ACTIVE && Math.random() < (themeKey === "mixed" ? 0.52 : 0.42)) {
       scheduleThreat("splitter", 0.75, "SPLITTER CELL", "#ff5b74", themeKey);
-    } else if (wave >= 3 && activeEnemyCount("cargo") < 1 && Math.random() < (themeKey === "cargo" ? 0.62 : 0.25)) {
+    } else if (isWaveUnlocked("cargo") && activeEnemyCount("cargo") < 1 && Math.random() < (themeKey === "cargo" ? 0.62 : 0.25)) {
       spawnCargoShip();
-    } else if (wave >= 2 && Math.random() < (themeKey === "ufo" ? 0.68 : 0.50)) {
+    } else if (isWaveUnlocked("ufo") && Math.random() < (themeKey === "ufo" ? 0.68 : 0.50)) {
       spawnUfo();
     } else {
       spawnDrone();
     }
     if (!didFormation) {
       const mothershipPresent = Boolean(activeMothership());
-      const extraChance = themeKey === "formation" ? 0.58 : themeKey === "mixed" ? 0.52 : mothershipPresent ? 0.24 : 0.44;
-      if (wave >= 2 && Math.random() < extraChance) {
-        if (wave >= 3 && activeEnemyCount("jet") < 2 && Math.random() < (themeKey === "jet" ? 0.42 : 0.24)) {
+      const extraChance = themeKey === "formation" ? 0.66 : themeKey === "mixed" ? 0.6 : mothershipPresent ? 0.3 : 0.52;
+      if (isWaveUnlocked("ufo") && Math.random() < extraChance) {
+        if (isWaveUnlocked("jet") && activeEnemyCount("jet") < 2 && Math.random() < (themeKey === "jet" ? 0.42 : 0.24)) {
           spawnFighterJet();
-        } else if (wave >= 4 && activeEnemyCount("splitter") < SPLITTER_MAX_ACTIVE && Math.random() < (themeKey === "mixed" ? 0.42 : 0.32)) {
+        } else if (isWaveUnlocked("splitter") && activeEnemyCount("splitter") < SPLITTER_MAX_ACTIVE && Math.random() < (themeKey === "mixed" ? 0.42 : 0.32)) {
           spawnSplitter();
-        } else if (wave >= 3 && activeEnemyCount("cargo") < 1 && Math.random() < (themeKey === "cargo" ? 0.42 : 0.2)) {
+        } else if (isWaveUnlocked("cargo") && activeEnemyCount("cargo") < 1 && Math.random() < (themeKey === "cargo" ? 0.42 : 0.2)) {
           spawnCargoShip();
-        } else if (wave >= 2 && Math.random() < (themeKey === "ufo" ? 0.55 : 0.38)) {
+        } else if (isWaveUnlocked("ufo") && Math.random() < (themeKey === "ufo" ? 0.55 : 0.38)) {
           spawnUfo();
         } else {
           spawnDrone();
@@ -3729,9 +3761,18 @@ function updateEnemies(dt) {
       const verticalPull = tier === "L" ? 0.58 : tier === "M" ? 0.74 : 0.92;
       const drift = tier === "L" ? 1.05 : tier === "M" ? 1.4 : 1.8;
       drone.y += ((drone.targetY - drone.y) * dt * verticalPull + Math.sin(drone.wobble) * drift + (drone.vy || 0) * dt) * moveScale;
-      drone.x += drone.vx * dt * moveScale;
-      drone.vx += Math.sin(drone.wobble * 0.7) * (tier === "L" ? 9 : 14) * dt * moveScale;
-      drone.vx *= tier === "L" ? 0.998 : 0.992;
+      if (tier === "L" && typeof drone.targetX === "number") {
+        const approach = clamp(dt * 4.2, 0, 1);
+        drone.x += ((drone.targetX - drone.x) * approach + drone.vx * dt * 0.36) * moveScale;
+        drone.vx *= 0.955;
+        if (Math.abs(drone.x - drone.targetX) < 14) {
+          drone.targetX = clamp(WIDTH / 2 + Math.sin(drone.wobble) * 48, 86, WIDTH - 86);
+        }
+      } else {
+        drone.x += drone.vx * dt * moveScale;
+        drone.vx += Math.sin(drone.wobble * 0.7) * (tier === "L" ? 9 : 14) * dt * moveScale;
+        drone.vx *= tier === "L" ? 0.998 : 0.992;
+      }
       if (drone.y > HEIGHT + 80) drone.exiting = true;
     } else {
       drone.y += ((drone.targetY - drone.y) * dt * 0.75 + Math.sin(drone.wobble) * (drone.type === "cargo" ? 0.35 : 0.55)) * moveScale;
@@ -4133,11 +4174,7 @@ function resolveCollisions() {
         }
         requestHitStop(shot.kind || "normal");
         shake = Math.max(shake, shot.kind === "shotgun" ? 0.06 : 0.035);
-        const hitText = result.shieldHit && !result.hpHit ? "SHIELD" : result.armorHit ? "ARMOR" : "";
         const hitColor = result.shieldHit ? SHIELD_COLOR : "#ffd166";
-        if (hitText) {
-          addFloatingText(drone.x, drone.y - 24, hitText, hitColor);
-        }
         addParticles(shot.x, shot.y, hitColor, shot.kind === "shotgun" ? 9 : 5, 130);
         audio.enemyHit(shot.kind || "normal", drone.hp / drone.maxHp, impactLayer(result));
         if (drone.hp <= 0) {
@@ -4189,10 +4226,6 @@ function resolveCollisions() {
         registerStreakHit("missile", missile.x, missile.y);
         drone.flash = Math.max(drone.flash, 0.16);
         shake = Math.max(shake, 0.075);
-        const missileText = result.shieldHit && !result.hpHit ? "SHIELD" : result.armorHit ? "ARMOR" : "";
-        if (missileText) {
-          addFloatingText(drone.x, drone.y - 24, missileText, result.shieldHit ? SHIELD_COLOR : "#ffd166");
-        }
         applyMissileSplash(missile, drone);
         addParticles(missile.x, missile.y, result.shieldHit ? SHIELD_COLOR : "#ffd166", 18, 220);
         audio.enemyHit("missile", drone.hp / drone.maxHp, impactLayer(result));
@@ -4221,7 +4254,6 @@ function resolveCollisions() {
     if (dist2(player, shard) < (player.r + shard.r + 2) ** 2) {
       addCharge(1);
       refreshStreakDecay();
-      addFloatingText(shard.x, shard.y - 16, "+1", "#6df6d5");
       addParticles(shard.x, shard.y, "#6df6d5", 16, 180);
       audio.pickup("energy");
       return false;
@@ -5790,6 +5822,13 @@ function drawFloatingTexts() {
       ctx.font = "800 11px system-ui, sans-serif";
       ctx.fillStyle = "#ffd166";
       ctx.fillText(suffix, text.x - 9 + mainWidth / 2 + 12, text.y + 2);
+    } else if (text.suffix) {
+      ctx.font = "800 18px system-ui, sans-serif";
+      const mainWidth = ctx.measureText(text.text).width;
+      ctx.fillText(text.text, text.x - 12, text.y);
+      ctx.font = "800 10px system-ui, sans-serif";
+      ctx.fillStyle = text.suffixColor;
+      ctx.fillText(` ${text.suffix}`, text.x - 12 + mainWidth / 2 + 28, text.y + 3);
     } else {
       ctx.font = "700 18px system-ui, sans-serif";
       ctx.fillText(text.text, text.x, text.y);
@@ -6968,12 +7007,16 @@ window.addEventListener("keydown", (event) => {
   if (key === "4") spawnDebugPowerup("machinegun");
   if (key === "e" && player) {
     player.charge = MAX_ENERGY;
-    addFloatingText(player.x, player.y - 44, "ENERGY", "#6df6d5");
+    if (debugVisible) {
+      addFloatingText(player.x, player.y - 44, "ENERGY", "#6df6d5");
+    }
     updateHud();
   }
   if (key === "h" && player) {
     player.hits = MAX_PLAYER_HITS;
-    addFloatingText(player.x, player.y - 44, "HULL", "#7cf7a8");
+    if (debugVisible) {
+      addFloatingText(player.x, player.y - 44, "HULL", "#7cf7a8");
+    }
     updateHud();
   }
 });

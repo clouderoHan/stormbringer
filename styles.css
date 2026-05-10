@@ -637,12 +637,51 @@ h1 {
 }
 
 .play-streak-hud strong b {
+  display: inline-block;
   color: currentColor;
   min-width: 14px;
   font-size: 1.2rem;
   font-weight: 950;
   line-height: 1;
   text-align: right;
+  transform-origin: 50% 65%;
+}
+
+.play-streak-hud strong.s-rank b {
+  animation: s-rank-letter-pulse 0.58s ease-in-out infinite alternate;
+  text-shadow:
+    0 0 8px currentColor,
+    0 0 18px rgba(255, 91, 116, 0.86),
+    0 0 30px rgba(255, 91, 116, 0.4);
+}
+
+.play-streak-hud strong.s-rank + .streak-meter i {
+  box-shadow:
+    0 0 12px currentColor,
+    0 0 24px rgba(255, 91, 116, 0.62);
+  animation: s-rank-bar-pulse 0.58s ease-in-out infinite alternate;
+}
+
+@keyframes s-rank-letter-pulse {
+  from {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+
+  to {
+    transform: scale(1.28);
+    filter: brightness(1.55);
+  }
+}
+
+@keyframes s-rank-bar-pulse {
+  from {
+    filter: brightness(1);
+  }
+
+  to {
+    filter: brightness(1.45);
+  }
 }
 
 .streak-meter {
