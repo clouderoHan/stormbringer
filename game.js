@@ -385,7 +385,6 @@ function registerStreakKill(type, x, y) {
   const chunks = {
     ship: 0.14,
     jet: 0.38,
-    splitterShard: 0.035,
     splitter: 0.28,
     ufo: 0.36,
     mine: 0.12,
@@ -509,6 +508,9 @@ const audio = {
     if (this.last[name] && now - this.last[name] < seconds) return false;
     this.last[name] = now;
     return true;
+  },
+  variation(amount = 0.06) {
+    return 1 + rand(-amount, amount);
   },
   tone({ type = "sine", frequency = 440, endFrequency = frequency, duration = 0.1, volume = 0.3, when = 0 }) {
     if (!this.enabled) return;
@@ -755,30 +757,46 @@ const audio = {
   },
   shoot() {
     if (!this.throttle("shoot", 0.14)) return;
-    this.tone({ type: "triangle", frequency: 520, endFrequency: 390, duration: 0.045, volume: 0.055 });
+    const pitch = this.variation(0.055);
+    const snap = this.variation(0.12);
+    this.tone({ type: "triangle", frequency: 520 * pitch, endFrequency: 390 * pitch, duration: 0.042 * this.variation(0.16), volume: 0.052 * snap });
   },
   machineGun() {
     if (!this.throttle("machinegun", 0.035)) return;
-    this.noise({ duration: 0.028, volume: 0.06, filterFrequency: 1300 });
-    this.tone({ type: "square", frequency: 220, endFrequency: 150, duration: 0.035, volume: 0.055 });
+    const pitch = this.variation(0.08);
+    const bite = this.variation(0.16);
+    this.noise({ duration: 0.024 * this.variation(0.18), volume: 0.055 * bite, filterFrequency: 1300 * this.variation(0.18) });
+    this.tone({ type: "square", frequency: 220 * pitch, endFrequency: 150 * pitch, duration: 0.032 * this.variation(0.18), volume: 0.052 * bite });
   },
   shotgun() {
     if (!this.throttle("shotgun", 0.18)) return;
-    this.noise({ duration: 0.17, volume: 0.34, filterFrequency: 560 });
-    this.noise({ duration: 0.045, volume: 0.09, filterFrequency: 1350, when: 0.018 });
-    this.tone({ type: "triangle", frequency: 82, endFrequency: 38, duration: 0.22, volume: 0.36 });
-    this.tone({ type: "square", frequency: 245, endFrequency: 92, duration: 0.1, volume: 0.12, when: 0.015 });
-    this.tone({ type: "triangle", frequency: 180, endFrequency: 115, duration: 0.1, volume: 0.09, when: 0.04 });
+    const pitch = this.variation(0.05);
+    const body = this.variation(0.12);
+    this.noise({ duration: 0.17 * this.variation(0.12), volume: 0.34 * body, filterFrequency: 560 * this.variation(0.14) });
+    this.noise({ duration: 0.045 * this.variation(0.18), volume: 0.09 * this.variation(0.16), filterFrequency: 1350 * this.variation(0.18), when: 0.018 * this.variation(0.3) });
+    this.tone({ type: "triangle", frequency: 82 * pitch, endFrequency: 38 * pitch, duration: 0.22 * this.variation(0.08), volume: 0.36 * body });
+    this.tone({ type: "square", frequency: 245 * pitch, endFrequency: 92 * pitch, duration: 0.1 * this.variation(0.12), volume: 0.12 * this.variation(0.14), when: 0.015 });
+    this.tone({ type: "triangle", frequency: 180 * pitch, endFrequency: 115 * pitch, duration: 0.1 * this.variation(0.14), volume: 0.09 * this.variation(0.16), when: 0.04 });
   },
   missile() {
     if (!this.throttle("missile", 0.08)) return;
-    this.tone({ type: "triangle", frequency: 260, endFrequency: 720, duration: 0.18, volume: 0.16 });
+    const pitch = this.variation(0.07);
+    this.tone({ type: "triangle", frequency: 260 * pitch, endFrequency: 720 * this.variation(0.08), duration: 0.18 * this.variation(0.12), volume: 0.16 * this.variation(0.14) });
   },
   laser() {
     if (!this.throttle("laser", 0.32)) return;
-    this.noise({ duration: 0.34, volume: 0.026, filterFrequency: 1800 });
-    this.tone({ type: "sawtooth", frequency: 132, endFrequency: 126, duration: 0.34, volume: 0.075 });
-    this.tone({ type: "triangle", frequency: 390, endFrequency: 420, duration: 0.32, volume: 0.035, when: 0.01 });
+    const pitch = this.variation(0.025);
+    this.noise({ duration: 0.34 * this.variation(0.08), volume: 0.026 * this.variation(0.12), filterFrequency: 1800 * this.variation(0.1) });
+    this.tone({ type: "sawtooth", frequency: 132 * pitch, endFrequency: 126 * pitch, duration: 0.34 * this.variation(0.08), volume: 0.075 * this.variation(0.1) });
+    this.tone({ type: "triangle", frequency: 390 * pitch, endFrequency: 420 * pitch, duration: 0.32 * this.variation(0.08), volume: 0.035 * this.variation(0.12), when: 0.01 });
+  },
+  laserTip(strength = 1) {
+    if (!this.throttle("laser-tip", 0.065)) return;
+    const pitch = this.variation(0.045);
+    const bite = clamp(strength, 0.55, 1.25);
+    this.tone({ type: "sine", frequency: 980 * pitch, endFrequency: 1480 * pitch, duration: 0.055, volume: 0.12 * bite });
+    this.tone({ type: "triangle", frequency: 1960 * pitch, endFrequency: 1120 * pitch, duration: 0.07, volume: 0.065 * bite, when: 0.012 });
+    this.noise({ duration: 0.028, volume: 0.045 * bite, filterFrequency: 5200 * this.variation(0.12), when: 0.006 });
   },
   mothershipAlert() {
     if (!this.throttle("mothership-alert", 2.5)) return;
@@ -987,6 +1005,7 @@ function resetGame() {
     lockdownTimer: 0,
     laserUltimateTimer: 0,
     laserUltimateMax: 0,
+    laserUltimateMode: "overdrive",
     laserWarmup: 0,
     frenzyTimer: 0,
   };
@@ -1585,21 +1604,6 @@ function addDeathAnimation(drone) {
     return;
   }
 
-  if (drone.type === "splitterShard") {
-    addRingBurst(drone.x, drone.y, "#ff5b74", 7, 2, 160, 1.8);
-    for (let i = 0; i < 8; i += 1) {
-      addParticle(drone.x, drone.y, {
-        color: i % 2 ? "#ff5b74" : "#edf7f5",
-        shape: "spark",
-        speed: 190,
-        minSpeed: 50,
-        life: 0.34,
-        size: rand(2, 5),
-      });
-    }
-    return;
-  }
-
   if (drone.type === "mine") {
     addRingBurst(drone.x, drone.y, "#ff5b74", 20, 7, 300, 3.2);
     addRingBurst(drone.x, drone.y, "#ffd166", 12, 2, 220, 2.4);
@@ -2085,18 +2089,24 @@ function spawnFighterFormation(themeKey = currentWaveTheme().key) {
     }
   }
 
-  addFloatingText(WIDTH / 2, 58, pattern === 3 ? "SWEEP FORMATION" : "FORMATION", "#ffd166");
   return true;
 }
 
 function spawnMine(x, y, options = {}) {
   const maxHp = options.hp || 5;
+  const r = options.r || 9;
+  const targetX = clamp(options.targetX ?? x + rand(-70, 70), r + 12, WIDTH - r - 12);
+  const targetY = clamp(options.targetY ?? rand(82, HEIGHT * 0.46), r + 42, HEIGHT * 0.5 - r - 8);
+  const angle = Math.atan2(targetY - y, targetX - x);
+  const speed = rand(260, 360);
   drones.push({
     x,
     y,
-    vx: 0,
-    targetY: y,
-    r: options.r || 9,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    targetX,
+    targetY,
+    r,
     type: "mine",
     hp: maxHp,
     maxHp,
@@ -2107,6 +2117,7 @@ function spawnMine(x, y, options = {}) {
     mineState: "incoming",
     armingTimer: 0,
     armingMax: 0.58,
+    arrivalFlash: 0,
     flash: 0,
   });
 }
@@ -2118,19 +2129,25 @@ function spawnMinefield() {
 
   if (pattern === 0) {
     for (let i = -2; i <= 2; i += 1) {
-      spawnMine(laneX + i * 42, -54 - Math.abs(i) * 18);
+      spawnMine(laneX + i * 58, -58 - Math.abs(i) * 18, { targetX: laneX + i * 42, targetY: rand(96, HEIGHT * 0.38) });
     }
   } else if (pattern === 1) {
     for (let i = 0; i < 7; i += 1) {
       const angle = -Math.PI * 0.85 + i * (Math.PI * 0.7 / 6);
-      spawnMine(laneX + Math.cos(angle) * 118, -40 + Math.sin(angle) * 52);
+      spawnMine(laneX + Math.cos(angle) * 148, -52 + Math.sin(angle) * 52, {
+        targetX: laneX + Math.cos(angle) * 118,
+        targetY: rand(88, HEIGHT * 0.42),
+      });
     }
   } else {
     const columns = [-1, 0, 1];
     for (let row = 0; row < 3; row += 1) {
       columns.forEach((column) => {
         if (row === 1 && column === 0) return;
-        spawnMine(laneX + column * 58 + (row % 2 ? 18 : 0), -46 - row * 54);
+        spawnMine(laneX + column * 76 + (row % 2 ? 24 : 0), -58 - row * 54, {
+          targetX: laneX + column * 58 + (row % 2 ? 18 : 0),
+          targetY: rand(92 + row * 24, HEIGHT * 0.48),
+        });
       });
     }
   }
@@ -2297,7 +2314,9 @@ function startBreather(duration = 2.4) {
 function scheduleThreat(type, delay, label, color, themeKey = currentWaveTheme().key) {
   pendingThreat = { type, timer: delay, themeKey };
   spawnTimer = Math.max(spawnTimer || 0, delay + 0.2);
-  addFloatingText(WIDTH / 2, 58, label, color);
+  if (label) {
+    addFloatingText(WIDTH / 2, 58, label, color);
+  }
 }
 
 function executePendingThreat() {
@@ -2657,11 +2676,13 @@ function triggerBulletSweep() {
 
 function triggerLanceSweep() {
   audio.ultimate("burst");
-  player.laserUltimateTimer = 2;
-  player.laserUltimateMax = 2;
+  const sRank = hasSOverdrive();
+  player.laserUltimateMode = sRank ? "prism" : "skyline";
+  player.laserUltimateTimer = 3;
+  player.laserUltimateMax = player.laserUltimateTimer;
   laserTickTimer = 0.24;
   addParticles(player.x, player.y - 24, "#2fd46f", 42, 260);
-  addRingBurst(player.x, player.y - 20, "#2fd46f", 24, 7, 260, 3.2);
+  addRingBurst(player.x, player.y - 20, sRank ? "#edf7f5" : "#8cff9a", sRank ? 36 : 30, 7, sRank ? 360 : 310, 3.2);
   shake = Math.max(shake, 0.16);
 }
 
@@ -2670,10 +2691,18 @@ const ultimateInfo = {
   sixfold: { label: "6-FOLD SHOT", color: "#6df6d5", sound: "burst" },
   breach: { label: "BREACH BLAST", color: "#ffd166", sound: "nuke" },
   nuke: { label: "MINI NUKE", color: "#ffd166", sound: "nuke" },
-  laser: { label: "LASER OVERDRIVE", color: "#2fd46f", sound: "burst" },
+  laser: { label: "SKYLINE LANCE", color: "#2fd46f", sound: "burst" },
   missiles: { label: "MISSILE STORM", color: "#8a7dff", sound: "missiles" },
   lockdown: { label: "RICOCHET SWEEP", color: "#ff5b74", sound: "lockdown" },
 };
+
+function ultimateDisplayInfo(type) {
+  const info = ultimateInfo[type] || ultimateInfo.burst;
+  if (type === "laser" && hasSOverdrive()) {
+    return { ...info, label: "PRISM CROSS" };
+  }
+  return info;
+}
 
 function activeWeaponInSlot(slot) {
   return slot === "main" ? player.mainWeapon !== "normal" : player.subWeapon !== "none";
@@ -2789,7 +2818,7 @@ function fireQueuedUltimate(type) {
 
 function beginUltimateCue() {
   const types = queuedUltimateTypes();
-  const info = ultimateInfo[types[types.length - 1]] || ultimateInfo.burst;
+  const info = ultimateDisplayInfo(types[types.length - 1]);
   const emptyScreen = !hasUltimateTargets();
   const holdForTargets = emptyScreen && spawnUltimatePayoffWave();
   player.charge = minimumEnergy();
@@ -2798,7 +2827,7 @@ function beginUltimateCue() {
     x: player.x,
     y: player.y,
     types,
-    label: types.map((type) => ultimateInfo[type].label).join(" + "),
+    label: types.map((type) => ultimateDisplayInfo(type).label).join(" + "),
     color: info.color,
     timer: holdForTargets ? 0.9 : ULTIMATE_CUE_DURATION,
     life: (holdForTargets ? 1.55 : ULTIMATE_CUE_DURATION + 0.8),
@@ -3179,7 +3208,7 @@ function destroyDrone(drone, grantCharge = true) {
   requestKillImpact(drone.type);
   recordKill(drone.type);
   registerStreakKill(drone.type, drone.x, drone.y);
-  const reward = drone.type === "mothership" ? 1600 : drone.type === "cargo" ? 520 : drone.type === "jet" ? 420 : drone.type === "splitter" ? splitterStats(drone.splitterTier || "L").reward : drone.type === "mine" ? 120 : drone.type === "splitterShard" ? 60 : 250;
+  const reward = drone.type === "mothership" ? 1600 : drone.type === "cargo" ? 520 : drone.type === "jet" ? 420 : drone.type === "splitter" ? splitterStats(drone.splitterTier || "L").reward : drone.type === "mine" ? 120 : 250;
   const toughness = Math.max(0, drone.maxHp - 3);
   const energyChance = clamp(0.22 + toughness * 0.04 + (drone.type === "ufo" ? 0.06 : drone.type === "jet" ? 0.045 : 0), 0.2, 0.58);
   const powerupChance = clamp(0.12 + toughness * 0.018 + (drone.type === "ufo" ? 0.04 : drone.type === "jet" ? 0.03 : 0), 0.12, 0.27);
@@ -3187,7 +3216,7 @@ function destroyDrone(drone, grantCharge = true) {
   if (drone.type === "splitter") {
     spawnSplitterChildren(drone);
   }
-  if (drone.type === "splitterShard" || drone.type === "mine" || (drone.type === "splitter" && (drone.splitterTier || "L") !== "L")) {
+  if (drone.type === "mine" || (drone.type === "splitter" && (drone.splitterTier || "L") !== "L")) {
     // Cleanup threats should not flood the reward economy.
   } else if (drone.type === "cargo") {
     spawnEnergyShard(drone.x, drone.y);
@@ -3331,24 +3360,52 @@ function updatePlayerLaser(dt) {
   playerLaserBeam = null;
   if (!isLaserActive()) return;
   const ultimate = player.laserUltimateTimer > 0;
+  const ultimateMode = player.laserUltimateMode || "overdrive";
+  const skyline = ultimate && ultimateMode === "skyline";
+  const prism = ultimate && ultimateMode === "prism";
   const overdrive = hasSOverdrive();
-  const range = ultimate ? 620 : overdrive ? 520 : 440;
-  const width = ultimate ? 42 : overdrive ? 18 : 13;
+  const range = skyline ? HEIGHT + 80 : prism ? 270 : ultimate ? 620 : overdrive ? 300 : 270;
+  const width = skyline ? 20 : prism ? 13 : ultimate ? 42 : overdrive ? 18 : 13;
   const angle = -Math.PI / 2;
   const x = player.x;
   const y1 = player.y - 25;
   const warmupProgress = ultimate ? 1 : 1 - clamp((player.laserWarmup || 0) / 0.38, 0, 1);
   const easedWarmup = warmupProgress * warmupProgress * (3 - 2 * warmupProgress);
   const currentRange = range * Math.max(0.08, easedWarmup);
-  const x2 = x + Math.cos(angle) * currentRange;
-  const y2 = y1 + Math.sin(angle) * currentRange;
+  const prismDirections = [
+    { angle: -Math.PI / 2, ox: 0, oy: -25, scale: 1 },
+    { angle: Math.PI / 2, ox: 0, oy: 18, scale: 0.62 },
+    { angle: Math.PI, ox: -15, oy: -4, scale: 0.66 },
+    { angle: 0, ox: 15, oy: -4, scale: 0.66 },
+    { angle: -Math.PI * 0.75, ox: -12, oy: -18, scale: 0.72 },
+    { angle: -Math.PI * 0.25, ox: 12, oy: -18, scale: 0.72 },
+    { angle: Math.PI * 0.75, ox: -12, oy: 10, scale: 0.56 },
+    { angle: Math.PI * 0.25, ox: 12, oy: 10, scale: 0.56 },
+  ];
+  const hitSegments = prism
+    ? prismDirections.map((direction) => {
+        const sx = x + direction.ox;
+        const sy = player.y + direction.oy;
+        return {
+          x1: sx,
+          y1: sy,
+          x2: sx + Math.cos(direction.angle) * currentRange * (direction.scale || 1),
+          y2: sy + Math.sin(direction.angle) * currentRange * (direction.scale || 1),
+          angle: direction.angle,
+        };
+      })
+    : [{ x1: x, y1, x2: x + Math.cos(angle) * currentRange, y2: y1 + Math.sin(angle) * currentRange, angle }];
+  const primarySegment = hitSegments[0];
   playerLaserBeam = {
     x,
     y1,
-    x2,
-    y2,
+    x2: primarySegment.x2,
+    y2: primarySegment.y2,
+    segments: hitSegments,
     width,
     ultimate,
+    skyline,
+    prism,
     overdrive,
     warmup: easedWarmup,
     angle,
@@ -3357,15 +3414,14 @@ function updatePlayerLaser(dt) {
   if (!ultimate && easedWarmup < 0.92) return;
   laserTickTimer -= dt;
   if (laserTickTimer > 0) return;
-  laserTickTimer = ultimate ? 0.035 : overdrive ? 0.045 : 0.058;
-  const damage = ultimate ? 2.6 : overdrive ? 0.92 : 0.68;
+  laserTickTimer = skyline ? 0.045 : prism ? 0.058 : ultimate ? 0.035 : overdrive ? 0.045 : 0.058;
+  const damage = skyline ? 0.95 : prism ? 0.42 : ultimate ? 2.6 : overdrive ? 0.58 : 0.42;
   const xPadding = width * 0.5;
-  const hitColor = ultimate ? "#edf7f5" : "#2fd46f";
+  const hitColor = prism ? "#2fd46f" : ultimate ? "#edf7f5" : "#2fd46f";
   let hitSomething = false;
-  const hitSegments = [{ x1: x, y1, x2, y2 }];
 
   const beamDistance2 = (target) => {
-    let best = { d2: Infinity, px: x, py: y1 };
+    let best = { d2: Infinity, px: x, py: y1, angle, tipFactor: 0 };
     hitSegments.forEach((segment) => {
       const ax = segment.x1;
       const ay = segment.y1;
@@ -3378,7 +3434,9 @@ function updatePlayerLaser(dt) {
       const px = ax + dx * t;
       const py = ay + dy * t;
       const d2 = dist2(target, { x: px, y: py });
-      if (d2 < best.d2) best = { d2, px, py };
+      const tipStart = overdrive && !ultimate ? 0.68 : 0.78;
+      const tipFactor = clamp((t - tipStart) / (1 - tipStart), 0, 1);
+      if (d2 < best.d2) best = { d2, px, py, angle: segment.angle || angle, tipFactor };
     });
     return best;
   };
@@ -3386,6 +3444,7 @@ function updatePlayerLaser(dt) {
   drones.forEach((drone) => {
     if (drone.hp <= 0) return;
     if (drone.type === "mothership") {
+      if (skyline && !isDroneOnPlayerScreen(drone)) return;
       const beamHit = beamDistance2(drone);
       if (beamHit.d2 > (drone.r + xPadding) ** 2) return;
       triggerMotherlandEvacuation(drone, beamHit.px, beamHit.py);
@@ -3398,10 +3457,17 @@ function updatePlayerLaser(dt) {
     if (!isDroneVulnerable(drone)) return;
     const beamHit = beamDistance2(drone);
     if (beamHit.d2 > (drone.r + xPadding) ** 2) return;
-    const result = damageDrone(drone, damage * streakDamageMultiplier(), "laser", angle);
+    const tipBonus = 1 + beamHit.tipFactor * (prism ? 2.15 : overdrive && !ultimate ? 3.05 : 2.45);
+    const result = damageDrone(drone, damage * tipBonus * streakDamageMultiplier(), "laser", beamHit.angle || angle);
     registerStreakHit("laser", drone.x, drone.y);
     drone.flash = Math.max(drone.flash, 0.08);
-    addParticles(beamHit.px, beamHit.py, impactLayer(result) === "armor" ? "#ffd166" : hitColor, ultimate ? 5 : 3, 90);
+    const tipHit = beamHit.tipFactor > 0.55;
+    addParticles(beamHit.px, beamHit.py, impactLayer(result) === "armor" ? "#ffd166" : tipHit ? "#edf7f5" : hitColor, ultimate || tipHit ? 7 : 3, tipHit ? 220 : 80);
+    if (beamHit.tipFactor > 0.72) {
+      addRingBurst(beamHit.px, beamHit.py, "#edf7f5", 11, 3, 230, 2.6);
+      addRingBurst(beamHit.px, beamHit.py, "#2fd46f", 7, 8, 190, 2);
+      audio.laserTip(beamHit.tipFactor);
+    }
     audio.enemyHit("laser", drone.hp / drone.maxHp, impactLayer(result));
     hitSomething = true;
     if (drone.hp <= 0) destroyDrone(drone);
@@ -3411,8 +3477,14 @@ function updatePlayerLaser(dt) {
     bossTargets().forEach((target) => {
       const beamHit = beamDistance2(target);
       if (beamHit.d2 > (target.r + xPadding) ** 2) return;
-      damageBossTarget(target, damage * 0.82 * streakDamageMultiplier());
-      addParticles(beamHit.px, beamHit.py, hitColor, ultimate ? 4 : 2, 90);
+      const tipBonus = 1 + beamHit.tipFactor * (prism ? 2.15 : overdrive && !ultimate ? 3.05 : 2.45);
+      damageBossTarget(target, damage * tipBonus * 0.82 * streakDamageMultiplier());
+      addParticles(beamHit.px, beamHit.py, beamHit.tipFactor > 0.55 ? "#edf7f5" : hitColor, ultimate || beamHit.tipFactor > 0.55 ? 6 : 2, beamHit.tipFactor > 0.55 ? 220 : 80);
+      if (beamHit.tipFactor > 0.72) {
+        addRingBurst(beamHit.px, beamHit.py, "#edf7f5", 11, 3, 230, 2.6);
+        addRingBurst(beamHit.px, beamHit.py, "#2fd46f", 7, 8, 190, 2);
+        audio.laserTip(beamHit.tipFactor);
+      }
       hitSomething = true;
     });
   }
@@ -3574,10 +3646,10 @@ function updatePlayer(dt) {
         addMuzzleBlast(player.x + 4, player.y - 14, { angle: -Math.PI / 2 + 0.18, color: "#6df6d5", coreColor: "#edf7f5", type: "burst", size: 0.82, life: 0.095 });
         ejectShell(player.x - 8, player.y + 1, { side: -1, color: "#6df6d5", size: 4.5, speed: 170, minSpeed: 72, life: 0.68, gravity: 450 });
         ejectShell(player.x + 8, player.y + 1, { side: 1, color: "#6df6d5", size: 4.5, speed: 170, minSpeed: 72, life: 0.68, gravity: 450 });
-        shotTimer = 0.13 / frenzyScale;
+        shotTimer = 0.18 / frenzyScale;
       } else {
         fireDefaultShot();
-        shotTimer = 0.095 / frenzyScale;
+        shotTimer = 0.145 / frenzyScale;
       }
       audio.shoot();
     }
@@ -3609,7 +3681,7 @@ function updateEnemies(dt) {
     if ((themeKey === "formation" || (themeKey === "mixed" && Math.random() < 0.45) || Math.random() < 0.2) && canFormation) {
       didFormation = true;
       formationTimer = rand(FORMATION_SPAWN_DELAY[0], FORMATION_SPAWN_DELAY[1]);
-      scheduleThreat("formation", 0.85, "FORMATION INCOMING", "#ffd166", themeKey);
+      scheduleThreat("formation", 0.85, "", "#ffd166", themeKey);
     } else if ((themeKey === "mine" || (themeKey === "mixed" && Math.random() < 0.38) || Math.random() < 0.14) && canMinefield) {
       didFormation = true;
       minefieldTimer = rand(MINEFIELD_SPAWN_DELAY[0], MINEFIELD_SPAWN_DELAY[1]);
@@ -3668,7 +3740,7 @@ function updateEnemies(dt) {
       drone.vy = Math.max(drone.vy || 0, 96);
       drone.targetY = drone.y + 120;
     }
-    drone.wobble += dt * (drone.type === "ufo" ? 4.2 : drone.type === "mothership" ? 1.6 : drone.type === "cargo" ? 2.1 : drone.type === "splitter" || drone.type === "splitterShard" ? 4.8 : 3);
+    drone.wobble += dt * (drone.type === "ufo" ? 4.2 : drone.type === "mothership" ? 1.6 : drone.type === "cargo" ? 2.1 : drone.type === "splitter" ? 4.8 : 3);
     if (drone.type === "ufo") {
       drone.spin += dt * (drone.spinSpeed || 5);
     }
@@ -3678,11 +3750,8 @@ function updateEnemies(dt) {
     }
     if (drone.type === "mine") {
       drone.spin += dt * (drone.spinSpeed || 1.4);
-      if (drone.mineState === "incoming" && isDroneOnPlayerScreen(drone)) {
-        drone.mineState = "arming";
-        drone.armingTimer = drone.armingMax || 0.58;
-        addRingBurst(drone.x, drone.y, "#ffd166", 14, 5, 170, 2.2);
-      } else if (drone.mineState === "arming") {
+      drone.arrivalFlash = Math.max(0, (drone.arrivalFlash || 0) - dt);
+      if (drone.mineState === "arming") {
         drone.armingTimer = Math.max(0, (drone.armingTimer || 0) - dt);
         if (drone.armingTimer <= 0) {
           drone.mineState = "armed";
@@ -3692,7 +3761,7 @@ function updateEnemies(dt) {
       }
     }
     const moveScale = droneMoveScale(drone);
-    if (!drone.exiting && ENEMY_FORWARD_DRIFT[drone.type]) {
+    if (!drone.exiting && ENEMY_FORWARD_DRIFT[drone.type] && (drone.type !== "mine" || drone.mineState === "armed")) {
       const driftSpeed = drone.type === "cargo" && drone.fleeing ? 10 : ENEMY_FORWARD_DRIFT[drone.type];
       const drift = driftSpeed * dt * moveScale;
       drone.y += drift;
@@ -3706,7 +3775,29 @@ function updateEnemies(dt) {
       drone.y += MOTHERLAND_PASS_DRIFT * dt;
       drone.targetY = drone.y;
     } else if (drone.type === "mine") {
-      // Mines are fixed in space; only the player's forward motion carries them down-screen.
+      if (drone.mineState === "incoming") {
+        const dx = (drone.targetX || drone.x) - drone.x;
+        const dy = (drone.targetY || drone.y) - drone.y;
+        const distance = Math.hypot(dx, dy);
+        const dashSpeed = 330;
+        if (distance <= Math.max(8, dashSpeed * dt)) {
+          drone.x = drone.targetX;
+          drone.y = drone.targetY;
+          drone.vx = 0;
+          drone.vy = 0;
+          drone.mineState = "arming";
+          drone.armingTimer = drone.armingMax || 0.58;
+          drone.arrivalFlash = 0.28;
+          addRingBurst(drone.x, drone.y, "#ffd166", 14, 5, 170, 2.2);
+        } else {
+          const nx = dx / distance;
+          const ny = dy / distance;
+          drone.vx = nx * dashSpeed;
+          drone.vy = ny * dashSpeed;
+          drone.x += drone.vx * dt * moveScale;
+          drone.y += drone.vy * dt * moveScale;
+        }
+      }
     } else if (drone.type === "cargo" && drone.fleeing) {
       drone.vx += (drone.escapeDir || (drone.x < WIDTH / 2 ? -1 : 1)) * 230 * dt;
       drone.vx = clamp(drone.vx, -300, 300);
@@ -3746,15 +3837,6 @@ function updateEnemies(dt) {
           drone.cooldown = UFO_PRE_FIRE_HOLD;
         }
       }
-    } else if (drone.type === "splitterShard") {
-      drone.lifetime -= dt;
-      drone.vy += 18 * dt * moveScale;
-      drone.vx += Math.sin(drone.wobble) * 7 * dt * moveScale;
-      drone.vx *= 0.992;
-      drone.vy *= 0.996;
-      drone.x += drone.vx * dt * moveScale;
-      drone.y += drone.vy * dt * moveScale;
-      if (drone.lifetime <= 0) drone.exiting = true;
     } else if (drone.type === "splitter") {
       drone.splitBirth = Math.max(0, (drone.splitBirth || 0) - dt);
       const tier = drone.splitterTier || "L";
@@ -3877,7 +3959,6 @@ function updateEnemies(dt) {
     if (drone.hp <= 0) return false;
     if (drone.exiting) return drone.x > -110 && drone.x < WIDTH + 110 && drone.y > -100 && drone.y < HEIGHT + 140;
     if (drone.type === "mothership") return drone.y < HEIGHT + drone.r + 80;
-    if (drone.type === "splitterShard") return drone.x > -70 && drone.x < WIDTH + 70 && drone.y > -80 && drone.y < HEIGHT + 80;
     return drone.x > -70 && drone.x < WIDTH + 70 && drone.y < HEIGHT + 110;
   });
 }
@@ -5174,10 +5255,6 @@ function drawDrone(drone) {
     drawSplitter(drone);
     return;
   }
-  if (drone.type === "splitterShard") {
-    drawSplitterShard(drone);
-    return;
-  }
   if (drone.type === "mine") {
     drawMine(drone);
     return;
@@ -5516,30 +5593,6 @@ function drawSplitter(drone) {
 
   drawDefenseMeters(drone, drone.x, drone.y + drone.r + 3, Math.max(28, drone.r * 1.9));
   drawSuppressionEffect(drone);
-}
-
-function drawSplitterShard(drone) {
-  drawFrenzyEffect(drone);
-  ctx.save();
-  ctx.translate(drone.x, drone.y);
-  applyDroneImpactTransform(drone);
-  ctx.rotate(angleTowardPlayer(drone) + drone.wobble * 0.12);
-  ctx.fillStyle = drone.flash > 0 ? "#edf7f5" : isFrenziedEnemy(drone) ? "#ff5b74" : "#b84d6d";
-  ctx.strokeStyle = "#071014";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(10, 0);
-  ctx.lineTo(-4, -8);
-  ctx.lineTo(-8, 4);
-  ctx.lineTo(1, 8);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = "#ffd166";
-  ctx.beginPath();
-  ctx.arc(2, 0, 2.4, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
 }
 
 function drawMothership(drone) {
@@ -6569,59 +6622,113 @@ function drawPlayerLaserBeam() {
   if (!playerLaserBeam) return;
   const beam = playerLaserBeam;
   const t = beam.pulse || 0;
-  const color = beam.ultimate ? "#edf7f5" : "#2fd46f";
-  const core = beam.ultimate ? "#2fd46f" : "#edf7f5";
+  const color = beam.skyline ? "#8cff9a" : beam.prism ? "#2fd46f" : beam.ultimate ? "#edf7f5" : "#2fd46f";
+  const core = beam.skyline ? "#edf7f5" : beam.prism ? "#edf7f5" : beam.ultimate ? "#2fd46f" : "#edf7f5";
+  const segments = beam.segments || [{ x1: beam.x, y1: beam.y1, x2: beam.x2, y2: beam.y2, angle: beam.angle || -Math.PI / 2 }];
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
   ctx.lineCap = "round";
   ctx.shadowColor = color;
-  ctx.shadowBlur = beam.ultimate ? 26 : 16;
-  ctx.globalAlpha = beam.ultimate ? 0.24 : 0.16;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = beam.width * (2.4 + t * 0.45);
-  ctx.beginPath();
-  ctx.moveTo(beam.x, beam.y1);
-  ctx.lineTo(beam.x2, beam.y2);
-  ctx.stroke();
-  ctx.globalAlpha = beam.ultimate ? 0.58 : 0.42;
-  ctx.lineWidth = beam.width * (1.08 + t * 0.18);
-  ctx.strokeStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(beam.x, beam.y1);
-  ctx.lineTo(beam.x2, beam.y2);
-  ctx.stroke();
-  ctx.globalAlpha = 0.9;
-  ctx.lineWidth = Math.max(2.2, beam.width * 0.28);
-  ctx.strokeStyle = core;
-  ctx.beginPath();
-  ctx.moveTo(beam.x, beam.y1);
-  ctx.lineTo(beam.x2, beam.y2);
-  ctx.stroke();
+  ctx.shadowBlur = beam.skyline ? 22 : beam.prism ? 18 : beam.ultimate ? 26 : 16;
+  const drawSegment = (segment) => {
+    ctx.globalAlpha = beam.skyline ? 0.2 : beam.prism ? 0.14 : beam.ultimate ? 0.24 : 0.16;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = beam.width * (2.4 + t * 0.45);
+    ctx.beginPath();
+    ctx.moveTo(segment.x1, segment.y1);
+    ctx.lineTo(segment.x2, segment.y2);
+    ctx.stroke();
+    ctx.globalAlpha = beam.skyline ? 0.5 : beam.prism ? 0.36 : beam.ultimate ? 0.58 : 0.42;
+    ctx.lineWidth = beam.width * (1.08 + t * 0.18);
+    ctx.strokeStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(segment.x1, segment.y1);
+    ctx.lineTo(segment.x2, segment.y2);
+    ctx.stroke();
+    ctx.globalAlpha = 0.9;
+    ctx.lineWidth = Math.max(2.2, beam.width * 0.28);
+    ctx.strokeStyle = core;
+    ctx.beginPath();
+    ctx.moveTo(segment.x1, segment.y1);
+    ctx.lineTo(segment.x2, segment.y2);
+    ctx.stroke();
+  };
+  segments.forEach(drawSegment);
   ctx.globalAlpha = 0.7;
   ctx.fillStyle = core;
   ctx.beginPath();
-  ctx.arc(beam.x, beam.y1, beam.width * 0.42 + t * 2, 0, Math.PI * 2);
+  ctx.arc(beam.x, beam.y1, beam.width * (beam.prism ? 0.72 : 0.42) + t * 2, 0, Math.PI * 2);
   ctx.fill();
-  const tipX = beam.x2;
-  const tipY = beam.y2;
   const sparkSize = beam.width * (beam.ultimate ? 0.9 : 0.65) + t * 7;
-  ctx.globalAlpha = beam.ultimate ? 0.9 : 0.72;
-  ctx.shadowBlur = beam.ultimate ? 24 : 14;
-  ctx.strokeStyle = core;
-  ctx.lineWidth = beam.ultimate ? 3 : 2;
-  for (let i = 0; i < 8; i += 1) {
-    const angle = (beam.angle || -Math.PI / 2) + (i / 7 - 0.5) * Math.PI * 0.92 + Math.sin(elapsed * 18 + i) * 0.16;
-    const inner = sparkSize * 0.24;
-    const outer = sparkSize * (0.8 + ((i % 3) * 0.16)) + Math.sin(elapsed * 22 + i * 1.7) * 4;
-    ctx.beginPath();
-    ctx.moveTo(tipX + Math.cos(angle) * inner, tipY + Math.sin(angle) * inner);
-    ctx.lineTo(tipX + Math.cos(angle) * outer, tipY + Math.sin(angle) * outer);
-    ctx.stroke();
+  const sPassiveTip = beam.overdrive && !beam.ultimate;
+  if (!beam.prism) {
+    const tipZoneLength = Math.max(sPassiveTip ? 58 : 42, beam.width * (sPassiveTip ? 7.2 : 5.4));
+    ctx.save();
+    ctx.setLineDash([7, 5]);
+    ctx.globalAlpha = sPassiveTip ? 0.78 : 0.66;
+    ctx.strokeStyle = "#edf7f5";
+    ctx.shadowColor = "#edf7f5";
+    ctx.shadowBlur = (sPassiveTip ? 20 : 14) + t * 10;
+    ctx.lineWidth = Math.max(3, beam.width * 0.28);
+    segments.forEach((segment) => {
+      const angle = segment.angle || beam.angle || -Math.PI / 2;
+      const dx = Math.cos(angle) * tipZoneLength;
+      const dy = Math.sin(angle) * tipZoneLength;
+      ctx.beginPath();
+      ctx.moveTo(segment.x2 - dx, segment.y2 - dy);
+      ctx.lineTo(segment.x2, segment.y2);
+      ctx.stroke();
+    });
+    ctx.setLineDash([]);
+    ctx.restore();
   }
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(tipX, tipY, Math.max(3, beam.width * 0.22 + t * 2), 0, Math.PI * 2);
-  ctx.fill();
+  ctx.globalAlpha = beam.skyline ? 0.82 : beam.prism ? 0.62 : beam.ultimate ? 0.9 : 0.72;
+  ctx.shadowBlur = beam.skyline ? 20 : beam.prism ? 16 : beam.ultimate ? 24 : 14;
+  ctx.strokeStyle = core;
+  ctx.lineWidth = beam.skyline ? 2.5 : beam.prism ? 1.8 : beam.ultimate ? 3 : 2;
+  segments.forEach((segment, segmentIndex) => {
+    const tipX = segment.x2;
+    const tipY = segment.y2;
+    if (!beam.prism) {
+      const sparkCount = 8;
+      for (let i = 0; i < sparkCount; i += 1) {
+        const spreadRatio = sparkCount > 1 ? i / (sparkCount - 1) - 0.5 : 0;
+        const sparkAngle = (segment.angle || beam.angle || -Math.PI / 2) + spreadRatio * Math.PI * 0.92 + Math.sin(elapsed * 18 + i + segmentIndex) * 0.16;
+        const inner = sparkSize * 0.24;
+        const outer = sparkSize * (0.8 + ((i % 3) * 0.16)) + Math.sin(elapsed * 22 + i * 1.7) * 4;
+        ctx.beginPath();
+        ctx.moveTo(tipX + Math.cos(sparkAngle) * inner, tipY + Math.sin(sparkAngle) * inner);
+        ctx.lineTo(tipX + Math.cos(sparkAngle) * outer, tipY + Math.sin(sparkAngle) * outer);
+        ctx.stroke();
+      }
+    }
+    const angle = segment.angle || beam.angle || -Math.PI / 2;
+    ctx.globalAlpha = sPassiveTip ? 1 : beam.prism ? 0.82 : 0.98;
+    ctx.strokeStyle = "#edf7f5";
+    ctx.lineWidth = Math.max(2.5, beam.width * 0.26);
+    ctx.beginPath();
+    ctx.arc(tipX, tipY, Math.max(sPassiveTip ? 9 : 7, beam.width * (sPassiveTip ? 0.88 : 0.72) + t * 4), 0, Math.PI * 2);
+    ctx.stroke();
+    if (!beam.prism) {
+      ctx.globalAlpha = 0.76;
+      ctx.strokeStyle = "#2fd46f";
+      ctx.lineWidth = Math.max(2, beam.width * 0.2);
+      const crossLength = 10;
+      const forwardLength = 12;
+      const backwardLength = 7;
+      ctx.beginPath();
+      ctx.moveTo(tipX - Math.cos(angle + Math.PI / 2) * crossLength, tipY - Math.sin(angle + Math.PI / 2) * crossLength);
+      ctx.lineTo(tipX + Math.cos(angle + Math.PI / 2) * crossLength, tipY + Math.sin(angle + Math.PI / 2) * crossLength);
+      ctx.moveTo(tipX - Math.cos(angle) * forwardLength, tipY - Math.sin(angle) * forwardLength);
+      ctx.lineTo(tipX + Math.cos(angle) * backwardLength, tipY + Math.sin(angle) * backwardLength);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 0.96;
+    ctx.fillStyle = "#edf7f5";
+    ctx.beginPath();
+    ctx.arc(tipX, tipY, Math.max(4.5, beam.width * 0.36 + t * 2.8), 0, Math.PI * 2);
+    ctx.fill();
+  });
   ctx.restore();
 }
 

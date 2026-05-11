@@ -11,7 +11,6 @@ window.StormbringerData = {
     ufo: "UFOs",
     cargo: "Cargo Ships",
     splitter: "Splitters",
-    splitterShard: "Splitter Shards",
     mine: "Mines",
     bossCannon: "Boss Cannons",
     boss: "Bosses",
