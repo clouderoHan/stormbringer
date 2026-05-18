@@ -4,6 +4,7 @@ const startScreen = document.getElementById("startScreen");
 const gameShell = document.getElementById("gameShell");
 const overlay = document.getElementById("menu");
 const startButton = document.getElementById("startButton");
+const skipTutorialToggle = document.getElementById("skipTutorialToggle");
 const restartButton = document.getElementById("restartButton");
 const pauseMenu = document.getElementById("pauseMenu");
 const resumeButton = document.getElementById("resumeButton");
@@ -86,6 +87,7 @@ let nextBossWave = 10;
 let wave = 1;
 let announcedWave = 1;
 let elapsed = 0;
+let gameplayElapsed = 0;
 let spawnTimer;
 let formationTimer;
 let minefieldTimer;
@@ -107,6 +109,20 @@ let playerHealFlash = 0;
 let playerHealPulse = 0;
 let magnetWasDown = false;
 let magnetHoldTime = 0;
+let magnetHintActive = false;
+let magnetHintDismissed = false;
+let magnetHintTimer = 0;
+let magnetHintBaitSpawned = false;
+let magnetHintCollected = 0;
+let magnetHintEnergyPulse = 0;
+let magnetHintLockX = WIDTH / 2;
+let magnetHintLockY = HEIGHT - 120;
+let tutorialPhase = "none";
+let movementHintBaitSpawned = false;
+let movementHintCollected = false;
+let combatTutorialEnemySpawned = false;
+let combatTutorialEnemyKilled = false;
+let combatTutorialPowerupCollected = false;
 let debugVisible = false;
 const ULTIMATE_CUE_DURATION = 0.55;
 const SHIELD_COLOR = "#2667ff";
@@ -222,6 +238,10 @@ const currentStreakProgress = () => {
 };
 const currentStreakDecayRate = () => STREAK_DECAY_BY_LEVEL[currentStreakLevel()] || 0;
 const isPowerupHidden = (type) => HIDDEN_POWERUPS.has(type);
+const isMovementTutorialActive = () => tutorialPhase === "move";
+const isMagnetTutorialActive = () => tutorialPhase === "magnet" && magnetHintActive && !magnetHintDismissed;
+const isCombatTutorialActive = () => tutorialPhase === "combat";
+const isTutorialActive = () => isMovementTutorialActive() || isMagnetTutorialActive() || isCombatTutorialActive();
 const inventorySlotCount = () => (currentStreakLevel() >= 5 ? 4 : currentStreakLevel() >= 4 ? 3 : currentStreakLevel() >= 3 ? 2 : 1);
 const isPreBossReliefWave = () => wave === ACTIVE_WAVE_PACE.boss - 1;
 const currentWaveTheme = () => (isPreBossReliefWave() ? PRE_BOSS_THEME : WAVE_THEMES[(wave - 1) % WAVE_THEMES.length]);
@@ -1002,7 +1022,7 @@ function releasePointerControl() {
   pointer.rightDown = false;
 }
 
-function resetGame() {
+function resetGame(options = {}) {
   audio.unlock();
   audio.start();
   player = {
@@ -1010,7 +1030,7 @@ function resetGame() {
     y: HEIGHT - 120,
     r: 7,
     hits: MAX_PLAYER_HITS,
-    invuln: 1.4,
+    invuln: 0,
     charge: 0,
     mainWeapon: "normal",
     mainTimer: 0,
@@ -1067,6 +1087,7 @@ function resetGame() {
   wave = 1;
   announcedWave = 1;
   elapsed = 0;
+  gameplayElapsed = 0;
   spawnTimer = 1.05;
   formationTimer = 2.8;
   minefieldTimer = 5.0;
@@ -1088,6 +1109,22 @@ function resetGame() {
   playerHealPulse = 0;
   magnetWasDown = false;
   magnetHoldTime = 0;
+  const forceSkipTutorial = Boolean(options && options.forceSkipTutorial);
+  const skipTutorial = forceSkipTutorial || Boolean(skipTutorialToggle && skipTutorialToggle.checked);
+  tutorialPhase = skipTutorial ? "none" : "move";
+  magnetHintDismissed = false;
+  magnetHintActive = false;
+  magnetHintTimer = 0;
+  magnetHintBaitSpawned = false;
+  magnetHintCollected = 0;
+  magnetHintEnergyPulse = 0;
+  magnetHintLockX = player.x;
+  magnetHintLockY = player.y;
+  movementHintBaitSpawned = false;
+  movementHintCollected = false;
+  combatTutorialEnemySpawned = false;
+  combatTutorialEnemyKilled = false;
+  combatTutorialPowerupCollected = false;
   state = "playing";
   startScreen.classList.add("hidden");
   gameShell.classList.remove("hidden");
@@ -1804,6 +1841,53 @@ function spawnEnergyShard(x, y) {
   });
 }
 
+function spawnMagnetHintBait() {
+  if (!player || magnetHintBaitSpawned) return;
+  magnetHintBaitSpawned = true;
+  const positions = [
+    { x: WIDTH * 0.18, y: HEIGHT * 0.22, vx: 0, vy: 0 },
+    { x: WIDTH * 0.82, y: HEIGHT * 0.22, vx: 0, vy: 0 },
+    { x: WIDTH * 0.5, y: HEIGHT * 0.78, vx: 0, vy: 0 },
+  ];
+  positions.forEach((pos, index) => {
+    const safe = keepLootInPlay(pos.x, pos.y, pos.vx, pos.vy, 42);
+    addLootReleaseFlash(safe.x, safe.y, "#6df6d5", true);
+    shards.push({
+      x: safe.x,
+      y: safe.y,
+      r: 7,
+      vx: safe.vx,
+      vy: safe.vy,
+      wobble: rand(0, Math.PI * 2),
+      drift: index === 1 ? 18 : index === 0 ? -18 : 0,
+      magnetWeight: 0.082,
+      life: 14.5,
+      hintBait: true,
+      stationary: true,
+    });
+  });
+}
+
+function spawnMovementHintBait() {
+  if (!player || movementHintBaitSpawned) return;
+  movementHintBaitSpawned = true;
+  const safe = keepLootInPlay(WIDTH / 2, HEIGHT * 0.52, 0, 0, 42);
+  addLootReleaseFlash(safe.x, safe.y, "#6df6d5", true);
+  shards.push({
+    x: safe.x,
+    y: safe.y,
+    r: 8,
+    vx: 0,
+    vy: 0,
+    wobble: rand(0, Math.PI * 2),
+    drift: 0,
+    magnetWeight: 0,
+    life: 18,
+    movementBait: true,
+    stationary: true,
+  });
+}
+
 function spawnBullet(x, y, angle, speed, radius, color, turn = 0) {
   addMuzzleBlast(x, y, { angle, color, coreColor: "#ffd166", type: "danger", size: 0.95, life: 0.2 });
   bullets.push({
@@ -2019,6 +2103,28 @@ function spawnDrone() {
     wobble: rand(0, Math.PI * 2),
     flash: 0,
   });
+}
+
+function spawnCombatTutorialFighter() {
+  if (combatTutorialEnemySpawned) return;
+  combatTutorialEnemySpawned = true;
+  const maxHp = 2.6;
+  drones.push({
+    x: WIDTH + 34,
+    y: 92,
+    vx: -58,
+    targetY: 148,
+    r: 17,
+    type: "ship",
+    hp: maxHp,
+    maxHp,
+    cooldown: 99,
+    wobble: rand(0, Math.PI * 2),
+    flash: 0,
+    enteredScreen: true,
+    tutorialEnemy: true,
+  });
+  addFloatingText(WIDTH * 0.64, 82, "DESTROY THE FIGHTER", "#ffd166");
 }
 
 function spawnFormationFighter(options) {
@@ -2435,7 +2541,7 @@ function spawnPowerup(x, y, type = randomPowerupType()) {
   const safe = keepLootInPlay(x, y, rand(-58, 58), rand(-24, 58), 44);
   const info = powerupInfo[type] || powerupInfo.shotgun;
   addLootReleaseFlash(safe.x, safe.y, info.color, true);
-  powerups.push({
+  const powerup = {
     x: safe.x,
     y: safe.y,
     r: 11,
@@ -2446,7 +2552,9 @@ function spawnPowerup(x, y, type = randomPowerupType()) {
     pulse: 0,
     magnetWeight: 0.065,
     life: rand(9.4, 12.2),
-  });
+  };
+  powerups.push(powerup);
+  return powerup;
 }
 
 function scatterInventoryPowerup(type, index = 0, total = 1) {
@@ -3293,6 +3401,15 @@ function destroyDrone(drone, grantCharge = true) {
   } else if (drone.type === "cargo") {
     spawnEnergyShard(drone.x, drone.y);
     spawnPowerup(drone.x, drone.y);
+  } else if (drone.tutorialEnemy) {
+    combatTutorialEnemyKilled = true;
+    const powerup = spawnPowerup(drone.x, drone.y, "shotgun");
+    if (powerup) {
+      powerup.tutorialPowerup = true;
+      powerup.collectDelay = 0.15;
+      powerup.life = 18;
+    }
+    addFloatingText(drone.x, drone.y - 42, "COLLECT POWERUP", "#ffd166");
   } else {
     if (grantCharge && drone.type !== "mothership" && Math.random() < energyChance) {
       spawnEnergyShard(drone.x, drone.y);
@@ -3644,13 +3761,30 @@ function movePlayerTowardPointer(dt) {
 function updatePlayer(dt) {
   const previousX = player.x;
   const previousY = player.y;
-  movePlayerTowardPointer(dt);
+  if (isMagnetTutorialActive()) {
+    player.x = magnetHintLockX;
+    player.y = magnetHintLockY;
+  } else {
+    movePlayerTowardPointer(dt);
+  }
 
   player.invuln = Math.max(0, player.invuln - dt);
   if (circleUltimate && !circleUltimate.resolved) {
     playerLaserBeam = null;
     player.invuln = Math.max(player.invuln, 0.12);
     pointer.rightDown = false;
+    player.x = clamp(player.x, 18, WIDTH - 18);
+    player.y = clamp(player.y, 18, HEIGHT - 18);
+    return;
+  }
+  if (isMagnetTutorialActive()) {
+    playerLaserBeam = null;
+    player.x = clamp(player.x, 18, WIDTH - 18);
+    player.y = clamp(player.y, 18, HEIGHT - 18);
+    return;
+  }
+  if (isMovementTutorialActive()) {
+    playerLaserBeam = null;
     player.x = clamp(player.x, 18, WIDTH - 18);
     player.y = clamp(player.y, 18, HEIGHT - 18);
     return;
@@ -4453,17 +4587,29 @@ function resolveCollisions() {
     const dropStep = circleActive ? 0.16 / 60 : breatherTimer > 0 ? 0.58 / 60 : 1 / 60;
     shard.life -= dropStep;
     shard.wobble += 0.045;
-    shard.vy += 0.18 * (circleActive ? 0.16 : 1);
-    shard.vx += Math.sin(shard.wobble) * 0.1 + (shard.drift || 0) * 0.0026;
-    shard.vx *= 0.988;
-    shard.vy *= 0.992;
-    shard.x += shard.vx * dropStep;
-    shard.y += shard.vy * dropStep;
+    if (!shard.stationary) {
+      shard.vy += 0.18 * (circleActive ? 0.16 : 1);
+      shard.vx += Math.sin(shard.wobble) * 0.1 + (shard.drift || 0) * 0.0026;
+      shard.vx *= 0.988;
+      shard.vy *= 0.992;
+      shard.x += shard.vx * dropStep;
+      shard.y += shard.vy * dropStep;
+    }
     if (!circleActive && pointer.rightDown) {
       magnetPull(shard, (shard.magnetWeight || 0.095) * (0.25 + magnetRamp() * 0.75));
     }
     if (dist2(player, shard) < (player.r + shard.r + 2) ** 2) {
       addCharge(1);
+      if (shard.hintBait) {
+        magnetHintCollected = Math.min(3, magnetHintCollected + 1);
+        magnetHintEnergyPulse = 0.55;
+      }
+      if (shard.movementBait) {
+        movementHintCollected = true;
+        magnetHintLockX = shard.x;
+        magnetHintLockY = shard.y;
+        magnetHintEnergyPulse = 1.25;
+      }
       refreshStreakDecay();
       addParticles(shard.x, shard.y, "#6df6d5", 16, 180);
       audio.pickup("energy");
@@ -4489,6 +4635,9 @@ function resolveCollisions() {
     if (!powerup.collectDelay && dist2(player, powerup) < (player.r + powerup.r + 3) ** 2) {
       refreshStreakDecay();
       collectPowerup(powerup.type);
+      if (powerup.tutorialPowerup) {
+        combatTutorialPowerupCollected = true;
+      }
       addParticles(powerup.x, powerup.y, powerupInfo[powerup.type].color, 20, 210);
       return false;
     }
@@ -4746,6 +4895,84 @@ function updateFrenzyTimers(dt) {
   });
 }
 
+function startMagnetTutorialPhase() {
+  tutorialPhase = "magnet";
+  movementHintCollected = true;
+  magnetHintDismissed = false;
+  magnetHintActive = true;
+  magnetHintTimer = 0;
+  magnetHintBaitSpawned = false;
+  magnetHintCollected = 0;
+  pointer.x = magnetHintLockX;
+  pointer.y = magnetHintLockY;
+  pointer.rightDown = false;
+  magnetWasDown = false;
+  magnetHoldTime = 0;
+  shards = shards.filter((shard) => !shard.movementBait);
+  addFloatingText(player.x, player.y - 54, "MAGNET TRAINING", "#6df6d5");
+  addRingBurst(player.x, player.y, "#6df6d5", 18, 5, 220, 2.5);
+}
+
+function startCombatTutorialPhase() {
+  tutorialPhase = "combat";
+  magnetHintDismissed = true;
+  magnetHintActive = false;
+  magnetHintTimer = 0;
+  combatTutorialEnemySpawned = false;
+  combatTutorialEnemyKilled = false;
+  combatTutorialPowerupCollected = false;
+  pointer.rightDown = false;
+  magnetWasDown = false;
+  magnetHoldTime = 0;
+  spawnTimer = 999;
+  pendingThreat = null;
+  addFloatingText(player.x, player.y - 62, "WEAPONS ONLINE", "#ffd166");
+  addRingBurst(player.x, player.y, "#ffd166", 22, 8, 250, 2.8);
+}
+
+function updateTutorial(dt) {
+  if (tutorialPhase === "none" || state !== "playing") return;
+  if (isMovementTutorialActive()) {
+    magnetHintTimer += dt;
+    pointer.rightDown = false;
+    magnetWasDown = false;
+    magnetHoldTime = 0;
+    if (!movementHintBaitSpawned && magnetHintTimer >= 0.45) {
+      spawnMovementHintBait();
+    }
+    if (movementHintCollected) {
+      startMagnetTutorialPhase();
+    }
+    return;
+  }
+  if (isCombatTutorialActive()) {
+    magnetHintTimer += dt;
+    if (!combatTutorialEnemySpawned && magnetHintTimer >= 0.55) {
+      spawnCombatTutorialFighter();
+    }
+    if (combatTutorialPowerupCollected) {
+      tutorialPhase = "none";
+      breatherTimer = Math.max(breatherTimer || 0, 0.8);
+      spawnTimer = 0.8;
+      addFloatingText(player.x, player.y - 58, "RUN START", "#6df6d5");
+      addRingBurst(player.x, player.y, "#6df6d5", 26, 10, 300, 3);
+    }
+    return;
+  }
+  if (!isMagnetTutorialActive()) return;
+  magnetHintTimer += dt;
+  if (!magnetHintBaitSpawned && magnetHintTimer >= 0.45) {
+    spawnMagnetHintBait();
+  }
+  if (magnetHintCollected >= 3) {
+    magnetHintEnergyPulse = 1.9;
+    addFloatingText(player.x, player.y - 64, "ENERGY ONLINE", "#6df6d5");
+    addRingBurst(player.x, player.y, "#6df6d5", 24, 10, 280, 3.2);
+    startCombatTutorialPhase();
+    return;
+  }
+}
+
 function updateEnergyFloor() {
   if (!player || ultimateCue) return;
   player.charge = Math.max(player.charge, minimumEnergy());
@@ -4836,19 +5063,25 @@ function update(dt) {
   }
 
   elapsed += dt;
-  wave = Math.max(wave, 1 + Math.floor(elapsed / 28));
-  if (wave !== announcedWave) {
-    announcedWave = wave;
+  const circleActive = circleUltimate && !circleUltimate.resolved;
+  const tutorialActive = isTutorialActive();
+  if (!tutorialActive) {
+    gameplayElapsed += dt;
+    wave = Math.max(wave, 1 + Math.floor(gameplayElapsed / 28));
+    if (wave !== announcedWave) {
+      announcedWave = wave;
+    }
   }
   shake = Math.max(0, shake - dt);
   updatePlayerDamageFeedback(dt);
   updatePlayerHealFeedback(dt);
-  updateKillStreak(dt);
-  updateRunTimers(dt);
-  updateFrenzyTimers(dt);
-  updateEnergyFloor();
-  updateCircleUltimate(dt);
-  const circleActive = circleUltimate && !circleUltimate.resolved;
+  if (!tutorialActive) {
+    updateKillStreak(dt);
+    updateRunTimers(dt);
+    updateFrenzyTimers(dt);
+    updateEnergyFloor();
+    updateCircleUltimate(dt);
+  }
   const worldDt = circleActive ? dt * 0.025 : dt;
   if (!circleActive && pointer.rightDown) {
     magnetHoldTime += dt;
@@ -4859,13 +5092,16 @@ function update(dt) {
     magnetWasDown = false;
     magnetHoldTime = 0;
   }
+  updateTutorial(dt);
 
   updatePlayer(dt);
-  updateEnemies(worldDt);
-  updateBoss(worldDt);
+  if (!tutorialActive || isCombatTutorialActive()) {
+    updateEnemies(worldDt);
+    updateBoss(worldDt);
+  }
   updateProjectiles(worldDt);
   resolveCollisions();
-  if (!circleActive) {
+  if (!circleActive && !tutorialActive) {
     triggerChargeRelease();
     updateUltimateCue(dt);
   }
@@ -4876,6 +5112,7 @@ function update(dt) {
   updateNukeEffects(worldDt);
   updateMissileSplashEffects(worldDt);
   updateCivilianShips(worldDt);
+  magnetHintEnergyPulse = Math.max(0, magnetHintEnergyPulse - dt * 0.42);
   updateHud();
 }
 
@@ -5041,16 +5278,28 @@ function drawEnergyPips() {
   const pipH = 12;
   const gap = 7;
   const cuePulse = ultimateCue ? clamp(ultimateCue.life / ultimateCue.maxLife, 0, 1) : 0;
+  const tutorialPulse = clamp(magnetHintEnergyPulse, 0, 1);
+  const tutorialPop = magnetHintEnergyPulse > 0 ? 1 + tutorialPulse * 0.16 : 1;
 
   for (let i = 0; i < MAX_ENERGY; i += 1) {
     const pipX = x + i * (pipW + gap);
-    ctx.fillStyle = "rgba(109, 246, 213, 0.08)";
-    ctx.fillRect(pipX, y, pipW, pipH);
-    ctx.strokeStyle = cuePulse > 0 ? `rgba(255, 209, 102, ${0.25 + cuePulse * 0.55})` : "rgba(109, 246, 213, 0.36)";
-    ctx.strokeRect(pipX, y, pipW, pipH);
+    const cx = pipX + pipW / 2;
+    const cy = y + pipH / 2;
+    const w = pipW * tutorialPop;
+    const h = pipH * tutorialPop;
+    const drawX = cx - w / 2;
+    const drawY = cy - h / 2;
+    ctx.fillStyle = tutorialPulse > 0 ? `rgba(109, 246, 213, ${0.12 + tutorialPulse * 0.12})` : "rgba(109, 246, 213, 0.08)";
+    ctx.fillRect(drawX, drawY, w, h);
+    ctx.strokeStyle = tutorialPulse > 0 ? `rgba(237, 247, 245, ${0.28 + tutorialPulse * 0.62})` : cuePulse > 0 ? `rgba(255, 209, 102, ${0.25 + cuePulse * 0.55})` : "rgba(109, 246, 213, 0.36)";
+    ctx.shadowColor = "#6df6d5";
+    ctx.shadowBlur = tutorialPulse > 0 ? 12 + tutorialPulse * 22 : 0;
+    ctx.lineWidth = tutorialPulse > 0 ? 1.5 + tutorialPulse * 1.8 : 1;
+    ctx.strokeRect(drawX, drawY, w, h);
+    ctx.shadowBlur = 0;
     if (i < player.charge) {
       ctx.fillStyle = "#6df6d5";
-      ctx.fillRect(pipX + 3, y + 3, pipW - 6, pipH - 6);
+      ctx.fillRect(drawX + 3, drawY + 3, w - 6, h - 6);
       if (i < minimumEnergy()) {
         const layer = currentStreakLayer();
         ctx.save();
@@ -6943,6 +7192,154 @@ function drawMagnetField() {
   ctx.restore();
 }
 
+function drawMouseHintIcon(x, y, pulse) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.strokeStyle = "#edf7f5";
+  ctx.fillStyle = "rgba(7, 16, 20, 0.72)";
+  ctx.shadowColor = "#6df6d5";
+  ctx.shadowBlur = 10 + pulse * 6;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(-13, -18, 26, 36, 13);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#6df6d5";
+  ctx.beginPath();
+  ctx.roundRect(1, -14, 8, 13, 5);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(237, 247, 245, 0.28)";
+  ctx.beginPath();
+  ctx.moveTo(0, -17);
+  ctx.lineTo(0, 1);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawMagnetHint() {
+  if (isMovementTutorialActive()) {
+    const alpha = clamp((magnetHintTimer - 0.35) / 0.45, 0, 1);
+    if (alpha <= 0 || !player) return;
+    const pulse = 0.5 + Math.sin(elapsed * 8) * 0.5;
+    const target = shards.find((shard) => shard.movementBait);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    if (target) {
+      ctx.globalCompositeOperation = "screen";
+      ctx.strokeStyle = "#6df6d5";
+      ctx.shadowColor = "#6df6d5";
+      ctx.shadowBlur = 10 + pulse * 8;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 8]);
+      ctx.beginPath();
+      ctx.moveTo(player.x, player.y - 16);
+      ctx.quadraticCurveTo((player.x + target.x) / 2, player.y - 86 - pulse * 10, target.x, target.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, 20 + pulse * 4, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "#edf7f5";
+    ctx.shadowColor = "#071014";
+    ctx.shadowBlur = 4;
+    ctx.font = "900 13px ui-monospace, Consolas, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("MOVE TO ENERGY", player.x, player.y - 54 - pulse * 3);
+    ctx.fillStyle = "#6df6d5";
+    ctx.font = "800 9px ui-monospace, Consolas, monospace";
+    ctx.fillText("MOUSE MOVEMENT", player.x, player.y - 38 - pulse * 3);
+    ctx.restore();
+    return;
+  }
+  if (isCombatTutorialActive()) {
+    const pulse = 0.5 + Math.sin(elapsed * 8) * 0.5;
+    const target = drones.find((drone) => drone.tutorialEnemy && drone.hp > 0);
+    const tutorialPowerup = powerups.find((powerup) => powerup.tutorialPowerup);
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.shadowColor = "#071014";
+    ctx.shadowBlur = 4;
+    ctx.font = "900 13px ui-monospace, Consolas, monospace";
+    if (target) {
+      ctx.fillStyle = "#ffd166";
+      ctx.fillText("DESTROY FIGHTER", WIDTH / 2, 70 + pulse * 3);
+      ctx.globalCompositeOperation = "screen";
+      ctx.strokeStyle = "#ffd166";
+      ctx.shadowColor = "#ffd166";
+      ctx.shadowBlur = 10 + pulse * 6;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, target.r + 12 + pulse * 4, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (tutorialPowerup) {
+      ctx.fillStyle = "#ffd166";
+      ctx.fillText("COLLECT POWERUP", WIDTH / 2, 70 + pulse * 3);
+      ctx.globalCompositeOperation = "screen";
+      ctx.strokeStyle = powerupInfo[tutorialPowerup.type].color;
+      ctx.shadowColor = powerupInfo[tutorialPowerup.type].color;
+      ctx.shadowBlur = 10 + pulse * 8;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(tutorialPowerup.x, tutorialPowerup.y, tutorialPowerup.r + 14 + pulse * 5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
+  if (!magnetHintActive || magnetHintDismissed || !player || state !== "playing") return;
+  const alpha = clamp((magnetHintTimer - 0.65) / 0.45, 0, 1) * clamp((16 - magnetHintTimer) / 1.4, 0, 1);
+  if (alpha <= 0) return;
+  const pulse = 0.5 + Math.sin(elapsed * 8) * 0.5;
+  const hintItems = shards.filter((shard) => shard.hintBait).slice(0, 4);
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  hintItems.forEach((item) => {
+    const angle = Math.atan2(player.y - item.y, player.x - item.x);
+    const flow = (elapsed * 1.8) % 1;
+    ctx.save();
+    ctx.translate(item.x, item.y);
+    ctx.rotate(angle);
+    ctx.strokeStyle = "#6df6d5";
+    ctx.shadowColor = "#6df6d5";
+    ctx.shadowBlur = 8;
+    ctx.lineWidth = 1.7;
+    for (let i = 0; i < 3; i += 1) {
+      const phase = ((i / 3) + flow) % 1;
+      ctx.globalAlpha = alpha * (1 - phase) * 0.38;
+      const x = 14 + phase * 42;
+      ctx.beginPath();
+      ctx.moveTo(x - 8, -5);
+      ctx.lineTo(x, 0);
+      ctx.lineTo(x - 8, 5);
+      ctx.stroke();
+    }
+    ctx.restore();
+  });
+  ctx.restore();
+
+  ctx.save();
+  const x = clamp(player.x + 48, 58, WIDTH - 58);
+  const y = clamp(player.y - 66, 64, HEIGHT - 84);
+  ctx.globalAlpha = alpha;
+  drawMouseHintIcon(x, y, pulse);
+  ctx.fillStyle = "#edf7f5";
+  ctx.shadowColor = "#071014";
+  ctx.shadowBlur = 4;
+  ctx.font = "900 13px ui-monospace, Consolas, monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("HOLD RMB", x, y + 34 + pulse * 2);
+  ctx.fillStyle = "#6df6d5";
+  ctx.font = "800 9px ui-monospace, Consolas, monospace";
+  ctx.fillText(`${magnetHintCollected}/3 ENERGY`, x, y + 48 + pulse * 2);
+  ctx.restore();
+}
+
 function drawPlayerLaserBeam() {
   if (!playerLaserBeam) return;
   const beam = playerLaserBeam;
@@ -7354,6 +7751,7 @@ function draw() {
   });
   drawFloatingTexts();
   drawMagnetField();
+  drawMagnetHint();
   drawPlayerLaserBeam();
   drawUltimateCue();
   drawCircleUltimate();
@@ -7496,9 +7894,9 @@ canvas.addEventListener("contextmenu", (event) => {
 });
 
 startButton.addEventListener("click", resetGame);
-restartButton.addEventListener("click", resetGame);
+restartButton.addEventListener("click", () => resetGame({ forceSkipTutorial: true }));
 resumeButton.addEventListener("click", closePauseMenu);
-pauseRestartButton.addEventListener("click", resetGame);
+pauseRestartButton.addEventListener("click", () => resetGame({ forceSkipTutorial: true }));
 pauseMenuTabs.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-menu]");
   if (!button) return;

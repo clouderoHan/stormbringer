@@ -257,6 +257,27 @@ canvas {
   font-weight: 800;
 }
 
+.title-option {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 36px;
+  color: #b8c8c5;
+  font-size: 0.82rem;
+  font-weight: 850;
+  cursor: pointer;
+  user-select: none;
+}
+
+.title-option input {
+  width: 16px;
+  height: 16px;
+  accent-color: #6df6d5;
+  cursor: pointer;
+}
+
 .run-summary {
   display: grid;
   gap: 14px;
