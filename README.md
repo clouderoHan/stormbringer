@@ -4,7 +4,9 @@ A standalone 2D browser bullet hell built with HTML canvas.
 
 ## Play
 
-Open `index.html` in a browser.
+Play in browser: [Stormbringer on GitHub Pages](https://clouderoHan.github.io/stormbringer/)
+
+Local fallback: open `index.html` in a browser.
 
 ## Project Layout
 
