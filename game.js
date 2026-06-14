@@ -278,9 +278,9 @@ const minimumEnergy = () => (hasSStreak() ? 1 : 0);
 const scoreMultiplier = () => (hasSStreak() ? 1.3 : currentStreakLevel() >= 4 ? 1.2 : 1);
 
 function splitterStats(tier = "L") {
-  if (tier === "S") return { tier: "S", next: null, radius: 12, hp: 1.6, speed: 130, cooldown: [1.45, 2.05], reward: 95, color: "#ff5b74" };
-  if (tier === "M") return { tier: "M", next: "S", radius: 20, hp: 3.2, speed: 104, cooldown: [1.25, 1.8], reward: 165, color: "#c95cff" };
-  return { tier: "L", next: "M", radius: 32, hp: 8.2, speed: 72, cooldown: [1.55, 2.25], reward: 360, color: "#9b56d9" };
+  if (tier === "S") return { tier: "S", next: null, radius: 12, hp: 1.2, speed: 130, cooldown: [1.45, 2.05], reward: 95, color: "#ff5b74" };
+  if (tier === "M") return { tier: "M", next: "S", radius: 20, hp: 2.4, speed: 104, cooldown: [1.25, 1.8], reward: 165, color: "#c95cff" };
+  return { tier: "L", next: "M", radius: 32, hp: 6.2, speed: 72, cooldown: [1.55, 2.25], reward: 360, color: "#9b56d9" };
 }
 const effectiveMainWeapon = () => (player ? player.mainWeapon : "normal");
 const isLaserActive = () => player && (effectiveMainWeapon() === "laser" || player.laserUltimateTimer > 0);
@@ -2293,6 +2293,9 @@ function spawnBossReinforcements() {
       escortOffsetX: slot.x,
       escortOffsetY: slot.y,
       escortPhase: index * 0.9 + rand(0, 0.4),
+      escortOrbitX: slot.id.includes("outer") ? 24 : 17,
+      escortOrbitY: slot.id.includes("outer") ? 16 : 12,
+      escortOrbitSpeed: rand(1.25, 1.75) * (slot.x < 0 ? -1 : 1),
     });
     spawned += 1;
     addMuzzleBlast(x, y, { angle: Math.PI / 2, color: "#ff8c42", coreColor: "#ffd166", type: "danger", size: 0.72, life: 0.12 });
@@ -4282,10 +4285,14 @@ function updateEnemies(dt) {
         drone.vy = 118;
         drone.cooldown = 99;
       } else {
-        const holdX = clamp(boss.x + (drone.escortOffsetX || 0), 28, WIDTH - 28);
-        const holdY = boss.y + (drone.escortOffsetY || 0) + Math.sin(elapsed * 2.4 + (drone.escortPhase || 0)) * 5;
-        drone.x += (holdX - drone.x) * Math.min(1, dt * 6.5 * moveScale);
-        drone.y += (holdY - drone.y) * Math.min(1, dt * 6.5 * moveScale);
+        const phase = elapsed * (drone.escortOrbitSpeed || 1.4) + (drone.escortPhase || 0);
+        const baseX = boss.x + (drone.escortOffsetX || 0);
+        const baseY = boss.y + (drone.escortOffsetY || 0);
+        const holdX = clamp(baseX + Math.cos(phase) * (drone.escortOrbitX || 18), 28, WIDTH - 28);
+        const holdY = baseY + Math.sin(phase * 1.35) * (drone.escortOrbitY || 12);
+        const follow = Math.min(1, dt * 4.2 * moveScale);
+        drone.x += (holdX - drone.x) * follow;
+        drone.y += (holdY - drone.y) * follow;
         drone.vx = holdX - drone.x;
         drone.targetX = holdX;
         drone.targetY = holdY;
