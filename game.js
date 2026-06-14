@@ -2425,8 +2425,8 @@ function updateOpeningSequence(dt) {
 }
 
 function spawnMine(x, y, options = {}) {
-  const maxHp = options.hp || 5;
-  const r = options.r || 9;
+  const maxHp = options.hp || 3.5;
+  const r = options.r || 11;
   const targetX = clamp(options.targetX ?? x + rand(-70, 70), r + 12, WIDTH - r - 12);
   const targetY = clamp(options.targetY ?? rand(82, HEIGHT * 0.46), r + 42, HEIGHT * 0.5 - r - 8);
   const angle = Math.atan2(targetY - y, targetX - x);
